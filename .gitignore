@@ -50,6 +50,7 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 cover/
+.benchmarks
 
 # Translations
 *.mo
@@ -172,3 +173,9 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+.idea/
+
+.pylintrc
+
+kafka.docker-compose.yaml

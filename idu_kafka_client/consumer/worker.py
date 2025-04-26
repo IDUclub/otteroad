@@ -1,0 +1,362 @@
+"""
+This module provides KafkaConsumerWorker, a high-level worker for consuming messages from Kafka topics,
+deserializing Avro-encoded payloads, and dispatching them to registered handlers.
+"""
+
+import asyncio
+import logging
+import queue
+import threading
+from typing import Any, ClassVar
+
+from confluent_kafka import Consumer, KafkaError, KafkaException, Message, TopicPartition
+from confluent_kafka.schema_registry import SchemaRegistryClient
+
+from idu_kafka_client.avro.serializer import AvroSerializerMixin
+from idu_kafka_client.consumer.handlers.registry import EventHandlerRegistry
+from idu_kafka_client.utils import LoggerProtocol
+
+
+class KafkaConsumerWorker(AvroSerializerMixin):
+    """
+    Worker to consume Kafka messages, deserialize them into events, and dispatch to handlers.
+
+    Combines a background polling thread with an asyncio processing loop. Handles Avro deserialization,
+    handler lookup, error management, and offset committing.
+
+    Args:
+        consumer_config (dict[str, Any]): Configuration dictionary for confluent_kafka.Consumer.
+        schema_registry (SchemaRegistryClient): Client for interacting with the Confluent Schema Registry.
+        handler_registry (EventHandlerRegistry): Registry mapping event types to handlers.
+        topics (Union[str, List[str]]): Topic name or list of topic names to subscribe to.
+        logger (Optional[LoggerProtocol]): Optional custom logger, defaults to module logger.
+        loop (Optional[asyncio.AbstractEventLoop]): Asyncio event loop to schedule tasks on.
+
+    Attributes:
+        _MAX_QUEUE_SIZE: Maximum number of messages in producer queue
+        _POLL_INTERVAL: Polling interval in seconds for delivery reports
+
+    Raises:
+        RuntimeError: If asyncio loop cannot be determined when creating the worker.
+    """
+
+    _MAX_QUEUE_SIZE: ClassVar[int] = 10000  # Prevents memory overconsumption
+    _POLL_INTERVAL: ClassVar[float] = 0.1  # 10ms polling interval
+
+    def __init__(
+        self,
+        consumer_config: dict[str, Any],
+        schema_registry: SchemaRegistryClient,
+        handler_registry: EventHandlerRegistry,
+        topics: list[str],
+        logger: LoggerProtocol | None = None,
+        loop: asyncio.AbstractEventLoop | None = None,
+    ):
+        """
+        Initialize the KafkaConsumerWorker and underlying Avro serializer.
+
+        Args:
+            consumer_config: Settings for Kafka consumer initialization.
+            schema_registry: Confluent Schema Registry client instance.
+            handler_registry: Registry of event type handlers.
+            topics: Single topic or list of topics to subscribe to.
+            logger: Custom logger implementing LoggerProtocol. Defaults to module logger.
+            loop: Asyncio event loop; defaults to current running loop.
+
+        Raises:
+            RuntimeError: If no running asyncio loop is available.
+        """
+
+        # Use provided logger or module-level logger
+        self._logger = logger or logging.getLogger(__name__)
+
+        # Initialize base Avro serializer
+        super().__init__(schema_registry_client=schema_registry, logger=self._logger)
+
+        # Copy settings to avoid mutating caller's dict
+        self._settings = consumer_config.copy()
+        self._handler_registry = handler_registry
+        self._topics = topics
+
+        # Event loop management
+        try:
+            self._loop = loop or asyncio.get_running_loop()
+        except RuntimeError as e:
+            raise RuntimeError("No event loop provided and not running in async context") from e
+
+        # Create Kafka consumer instance
+        self._consumer = Consumer(self._settings)
+
+        # Use asyncio queue to track outstanding tasks
+        self._queue: asyncio.Queue[Message] = asyncio.Queue(maxsize=self._MAX_QUEUE_SIZE)
+
+        # Threading and task control
+        self._cancelled = threading.Event()
+        self._poll_thread: threading.Thread | None = None
+        self._process_task: asyncio.Task | None = None
+
+        # Internal queue to buffer commit requests
+        self._commit_queue: queue.Queue[Message] = queue.Queue()
+
+    async def start(self) -> None:
+        """
+        Start the consumer worker: subscribe, start poll thread and processing task.
+
+        Raises:
+            AssertionError: If called outside the worker's event loop.
+        """
+        assert self._loop is asyncio.get_running_loop(), "Please, create objects with the same loop as running with"
+        assert self._poll_thread is None, "Did you call `start` twice?"
+
+        # Clear any previous cancellation state
+        self._cancelled.clear()
+
+        # Subscribe to the configured topics
+        self._consumer.subscribe(
+            self._topics,
+            on_assign=self._on_assign_sync,
+            on_revoke=self._on_revoke_sync,
+        )
+
+        # Start polling in separate daemon thread
+        self._poll_thread = threading.Thread(
+            target=self._poll_loop,
+            daemon=True,
+            name=f"kafka-consumer-{'/'.join(self._topics)}",
+        )
+        self._poll_thread.start()
+
+        # Schedule the asynchronous processing loop
+        self._process_task = self._loop.create_task(self._process_loop())
+        self._logger.info("Consumer started for topics: %s", self._topics)
+
+    def _poll_loop(self) -> None:
+        """
+        Poll loop running in background thread: fetch messages and enqueue for processing.
+
+        Raises:
+            Exception: Logs any unexpected errors then shuts down consumer.
+        """
+        try:
+            while not self._cancelled.is_set():
+                # First, process any pending commits
+                self._process_commits()
+
+                # Poll Kafka with a short timeout
+                msg = self._consumer.poll(self._POLL_INTERVAL)
+                if msg is None:
+                    continue
+
+                if msg.error():
+                    self._logger.error("Consumer error: %s", msg.error())
+                    continue
+
+                # Safely enqueue the message for asynchronous processing
+                self._loop.call_soon_threadsafe(self._queue.put_nowait, msg)
+        except Exception as e:  # pylint: disable=broad-except
+            self._logger.exception("Critical error in poll loop: %s", e)
+        finally:
+            # Ensure the consumer is closed on exit
+            self._shutdown_consumer()
+
+    def _process_commits(self) -> None:
+        """Process buffered commit requests synchronously."""
+        while True:
+            try:
+                msg = self._commit_queue.get_nowait()
+                self._consumer.commit(msg, asynchronous=False)
+                self._logger.debug("Committed offset %s", msg.offset())
+            except queue.Empty:
+                break
+            except Exception as e:  # pylint: disable=broad-except
+                self._logger.error("Commit error: %s", e, exc_info=True)
+
+    def _shutdown_consumer(self) -> None:
+        """Safely close Kafka consumer instance."""
+        try:
+            self._consumer.close()
+            self._logger.info("Kafka consumer closed")
+        except Exception as e:  # pylint: disable=broad-except
+            self._logger.error("Error closing consumer: %s", e, exc_info=True)
+
+    async def stop(self, timeout: float = 5.0) -> None:
+        """
+        Stop the worker: signal poll loop, wait for threads and tasks to finish.
+
+        Args:
+            timeout (float): Time in seconds to wait for poll thread to join.
+        """
+        # Signal the poll loop to exit
+        self._cancelled.set()
+
+        # Wait for the poll thread to finish
+        if self._poll_thread:
+            self._poll_thread.join(timeout=timeout)
+            if self._poll_thread.is_alive():
+                self._logger.warning("Poll thread did not exit gracefully")
+            self._poll_thread = None
+
+        # Wait for queued messages to be fully processed
+        await self._queue.join()
+
+        # Cancel the processing task
+        if self._process_task:
+            self._process_task.cancel()
+            try:
+                await self._process_task
+            except asyncio.CancelledError:
+                self._logger.debug("Processing task cancelled")
+
+        self._logger.info("Consumer worker stopped")
+
+    async def _process_loop(self) -> None:
+        """
+        Asyncio loop to process enqueued messages sequentially.
+
+        Raises:
+            asyncio.CancelledError: When processing loop is cancelled.
+        """
+        try:
+            while True:
+                # Wait for the next message
+                msg = await self._queue.get()
+                try:
+                    await self._handle_message(msg)
+                except Exception as e:  # pylint: disable=broad-except
+                    self._logger.error("Processing error: %s", e, exc_info=True)
+                finally:
+                    # Mark message done regardless of success/failure
+                    self._queue.task_done()
+        except asyncio.CancelledError:
+            self._logger.info("Processing loop cancelled")
+
+    async def _handle_message(self, msg: Message) -> None:
+        """
+        Deserialize message and dispatch to registered handler.
+
+        Args:
+            msg (Message): Raw Kafka message.
+
+        Raises:
+            Exception: Logs any errors during deserialization or handling.
+        """
+        try:
+            # Deserialize payload to event object
+            event = self.deserialize_message(msg)
+
+            # Lookup handler based on event type or content
+            handler = self._handler_registry.get_handler(event)
+            if handler is None:
+                self._logger.info("Handler not found for event: %s", event)
+                return
+
+            # Execute handler, using thread if synchronous
+            if asyncio.iscoroutinefunction(handler.process):
+                await handler.process(event, msg)
+            else:
+                await asyncio.to_thread(handler.process, event, msg)
+
+        except Exception as e:  # pylint: disable=broad-except
+            self._logger.info(msg)
+            self._logger.error(
+                "Failed to process message %s[%d]@%d: %s",
+                msg.topic(),
+                msg.partition(),
+                msg.offset(),
+                e,
+                exc_info=True,
+            )
+        finally:
+            # If auto-commit is disabled, buffer for commit
+            if not self._settings.get("enable.auto.commit", True):
+                self._commit_queue.put(msg)
+
+    def _validate_partition(self, partition: TopicPartition) -> bool:
+        """
+        Validate whether the specified partition exists for the given topic.
+
+        Args:
+            partition (TopicPartition): The topic and partition to validate.
+
+        Returns:
+            bool: True if the partition exists for the topic, False otherwise.
+        """
+        metadata = self._consumer.list_topics(partition.topic)
+        return partition.partition in metadata.topics[partition.topic].partitions
+
+    def _on_assign_sync(self, consumer: Consumer, partitions: list[TopicPartition]) -> None:
+        """
+        Synchronous callback for partition assignment.
+        Handles Kafka-specific errors, validates assignment, and ensures graceful recovery.
+
+        Args:
+            consumer (Consumer): Kafka Consumer instance.
+            partitions (List[TopicPartition]): List of assigned partitions.
+        """
+        try:
+            self._logger.info("Assigned partitions: %s", partitions)
+
+            # Additional check: partitions exist
+            valid_partitions = [p for p in partitions if self._validate_partition(p)]
+            if len(valid_partitions) != len(partitions):
+                self._logger.warning(
+                    "Attempted to assign invalid partitions. Valid: %s, All: %s", valid_partitions, partitions
+                )
+
+            # We assign only valid partitions
+            consumer.assign(valid_partitions)
+            self._logger.debug("Partitions assigned successfully: %s", valid_partitions)
+
+        except KafkaException as e:
+            kafka_error = e.args[0]
+            error_code = kafka_error.code()
+
+            # Обработка специфических ошибок Kafka
+            if error_code == KafkaError._ALL_BROKERS_DOWN:
+                self._logger.critical("All brokers unavailable: %s", kafka_error.str())
+            elif error_code == KafkaError._UNKNOWN_TOPIC:
+                self._logger.error("Topic does not exist: %s", [p.topic for p in partitions])
+            elif error_code == KafkaError._UNKNOWN_PARTITION:
+                self._logger.warning("Invalid partitions: %s", [p.partition for p in partitions])
+            else:
+                self._logger.error(
+                    "Kafka error during assignment (code=%s): %s", error_code, kafka_error.str(), exc_info=True
+                )
+
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            self._logger.error("Unexpected assignment error: %s", e, exc_info=True)
+
+        finally:
+            # Защита состояния потребителя
+            try:
+                if not consumer.assignment():  # Если назначение не удалось
+                    self._logger.warning("Consumer has no assigned partitions after assignment attempt")
+                    consumer.unassign()
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                self._logger.error("Failed to reset consumer state: %s", e)
+
+    def _on_revoke_sync(self, consumer: Consumer, partitions: list[TopicPartition]) -> None:
+        """
+        Synchronous callback for partition revocation. Commits offsets and unassigns.
+
+        Args:
+            consumer (Consumer): Kafka Consumer instance.
+            partitions (List[TopicPartition]): List of revoked partitions.
+        """
+        try:
+            self._logger.info("Revoked partitions: %s", partitions)
+            consumer.commit(offsets=partitions, asynchronous=False)
+            self._logger.debug("Offsets committed for revoked partitions")
+        except KafkaException as e:
+            # Handling the error of missing offsets
+            if e.args[0].code() == KafkaError._NO_OFFSET:
+                self._logger.warning("No offsets to commit for partitions: %s. Reason: %s", partitions, e)
+            else:
+                self._logger.error("Commit error on revoke: %s", e, exc_info=True)
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            self._logger.error("Unexpected error during revoke: %s", e, exc_info=True)
+        finally:
+            try:
+                consumer.unassign()
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                self._logger.error("Error unassigning partitions: %s", e)
