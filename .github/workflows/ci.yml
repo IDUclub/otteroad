@@ -1,0 +1,144 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  format-lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: 1.8.3
+
+      - name: Install dependencies
+        run: poetry install --with dev
+
+      - name: Cache Poetry dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/pypoetry
+            .venv
+          key: poetry-${{ hashFiles('poetry.lock') }}
+
+      - name: Run pylint
+        run: |
+          poetry run pylint otteroad > pylint-report.txt
+
+      - name: Upload pylint report
+        uses: actions/upload-artifact@v4
+        with:
+          name: pylint-report
+          path: pylint-report.txt
+
+      - name: Run isort
+        run: |
+          poetry run isort --check-only otteroad
+
+      - name: Run black
+        run: |
+          poetry run black --check otteroad
+
+  test:
+    runs-on: ubuntu-latest
+    needs: [format-lint]
+
+    services:
+      kafka:
+        image: confluentinc/cp-kafka:7.9.0
+        ports:
+          - 9092:9092
+        env:
+          KAFKA_ENABLE_KRAFT: "yes"
+          KAFKA_PROCESS_ROLES: "broker,controller"
+          KAFKA_NODE_ID: 1
+          CLUSTER_ID: ${{ github.run_id }}
+          KAFKA_LISTENERS: "INTERNAL://:29092,CONTROLLER://:29093,EXTERNAL://:9092"
+          KAFKA_ADVERTISED_LISTENERS: "INTERNAL://kafka:29092,EXTERNAL://localhost:9092"
+          KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT"
+          KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka:29093"
+          KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+          KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+          KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+          KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+          KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+          ALLOW_PLAINTEXT_LISTENER: "yes"
+        options: --name kafka --hostname kafka
+
+      schema-registry:
+        image: confluentinc/cp-schema-registry:7.9.0
+        ports:
+          - 8081:8081
+        env:
+          SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: "kafka:29092"
+          SCHEMA_REGISTRY_LISTENERS: "http://0.0.0.0:8081"
+          SCHEMA_REGISTRY_HOST_NAME: "schema-registry"
+        options: --name schema-registry --hostname schema-registry
+
+    steps:
+      - name: Check Kafka availability
+        run: |
+          docker exec kafka /usr/bin/kafka-topics --bootstrap-server localhost:9092 --list
+
+      - name: Wait for Schema Registry to be ready
+        run: |
+          for i in {1..30}; do
+            echo "Checking Schema Registry availability..."
+            curl -sf http://localhost:8081/subjects && break
+            sleep 2
+          done
+
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: 1.8.3
+
+      - name: Install dependencies
+        run: poetry install --with dev
+
+      - name: Cache Poetry dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/pypoetry
+            .venv
+          key: poetry-${{ hashFiles('poetry.lock') }}
+
+      - name: Run tests with coverage
+        run: |
+          poetry run pytest tests --cov=otteroad --cov-report=xml
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          file: coverage.xml
+          slug: Jesusya-26/otteroad

@@ -1,0 +1,23 @@
+{
+  "type": "record",
+  "name": "ProjectCreated",
+  "namespace": "scenario.events.projects",
+  "fields": [
+    {
+      "name": "project_id",
+      "type": "long",
+      "doc": "new project identifier"
+    },
+    {
+      "name": "base_scenario_id",
+      "type": "long",
+      "doc": "new project base scenario identifier"
+    },
+    {
+      "name": "territory_id",
+      "type": "long",
+      "doc": "region territory identifier where project has been created"
+    }
+  ],
+  "doc": "Model for message indicates that a project has been created."
+}

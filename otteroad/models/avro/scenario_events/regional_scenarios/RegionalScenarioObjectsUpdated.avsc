@@ -1,0 +1,34 @@
+{
+  "type": "record",
+  "name": "RegionalScenarioObjectsUpdated",
+  "namespace": "scenario.events.regional_scenarios",
+  "fields": [
+    {
+      "name": "scenario_id",
+      "type": "long",
+      "doc": "regional scenario identifier for which urban objects have been updated"
+    },
+    {
+      "name": "territory_id",
+      "type": "long",
+      "doc": "region territory identifier for which scenario has been created"
+    },
+    {
+      "name": "service_types",
+      "type": {
+        "type": "array",
+        "items": "long"
+      },
+      "doc": "list of service types identifiers which have been updated"
+    },
+    {
+      "name": "physical_object_types",
+      "type": {
+        "type": "array",
+        "items": "long"
+      },
+      "doc": "list of physical object types identifiers which have been updated"
+    }
+  ],
+  "doc": "Model for message indicates that urban objects have been updated for regional scenario."
+}

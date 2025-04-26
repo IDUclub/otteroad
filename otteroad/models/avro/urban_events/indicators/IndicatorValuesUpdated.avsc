@@ -1,0 +1,23 @@
+{
+  "type": "record",
+  "name": "IndicatorValuesUpdated",
+  "namespace": "urban.events.indicators",
+  "fields": [
+    {
+      "name": "territory_id",
+      "type": "long",
+      "doc": "territory identifier where indicator value has been updated"
+    },
+    {
+      "name": "indicator_id",
+      "type": "long",
+      "doc": "indicator identifier for which value has been updated"
+    },
+    {
+      "name": "indicator_value_id",
+      "type": "long",
+      "doc": "updated indicator value identifier"
+    }
+  ],
+  "doc": "Model for message indicates that an indicator value has been updated for territory."
+}

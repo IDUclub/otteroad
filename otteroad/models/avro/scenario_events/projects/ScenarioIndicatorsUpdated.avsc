@@ -1,0 +1,23 @@
+{
+  "type": "record",
+  "name": "ScenarioIndicatorsUpdated",
+  "namespace": "scenario.events.projects",
+  "fields": [
+    {
+      "name": "project_id",
+      "type": "long",
+      "doc": "project identifier where scenario has been updated"
+    },
+    {
+      "name": "scenario_id",
+      "type": "long",
+      "doc": "scenario identifier for which indicator value has been updated"
+    },
+    {
+      "name": "indicator_id",
+      "type": "long",
+      "doc": "updated indicator identifier for which value has been updated"
+    }
+  ],
+  "doc": "Model for message indicates that an indicator value has been updated for project scenario."
+}
