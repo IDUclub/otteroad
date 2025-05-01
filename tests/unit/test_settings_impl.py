@@ -5,7 +5,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from idu_kafka_client.settings import KafkaConsumerSettings, KafkaProducerSettings
+from otteroad.settings import KafkaConsumerSettings, KafkaProducerSettings
 
 
 class TestKafkaConsumerSettings:

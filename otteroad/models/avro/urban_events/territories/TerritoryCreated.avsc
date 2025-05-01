@@ -1,0 +1,13 @@
+{
+  "type": "record",
+  "name": "TerritoryCreated",
+  "namespace": "urban.events.territories",
+  "fields": [
+    {
+      "name": "territory_id",
+      "type": "long",
+      "doc": "new territory identifier"
+    }
+  ],
+  "doc": "Model for message indicates that a territory has been created."
+}

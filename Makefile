@@ -1,4 +1,4 @@
-CODE := idu_kafka_client
+CODE := otteroad
 TEST := tests
 
 lint:
@@ -32,7 +32,8 @@ install-from-build:
 	python -m wheel install dist/$(CODE)-*.whl
 
 test:
-	poetry run pytest --verbose tests/
+	poetry run pytest --verbose $(TEST)/
 
 test-cov:
-	poetry run pytest --verbose tests/ --cov $(CODE)/
+	poetry run pytest --verbose $(TEST)/ --cov=$(CODE)/ --cov-report=xml
+

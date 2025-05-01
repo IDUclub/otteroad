@@ -1,0 +1,13 @@
+{
+  "type": "record",
+  "name": "TerritoryUpdated",
+  "namespace": "urban.events.territories",
+  "fields": [
+    {
+      "name": "territory_id",
+      "type": "long",
+      "doc": "updated territory identifier"
+    }
+  ],
+  "doc": "Model for message indicates that a territory has been updated."
+}

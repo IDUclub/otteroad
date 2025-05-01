@@ -5,8 +5,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from idu_kafka_client.avro import AvroEventModel
-from idu_kafka_client.consumer.handlers import BaseMessageHandler, EventHandlerRegistry
+from otteroad.avro import AvroEventModel
+from otteroad.consumer.handlers import BaseMessageHandler, EventHandlerRegistry
 
 
 class TestEventHandlerRegistry:
@@ -21,7 +21,7 @@ class TestEventHandlerRegistry:
 
         class TestEvent(AvroEventModel):
             topic: ClassVar[str] = "test.topic"
-            schema_subject: ClassVar[str] = "test_subject"
+            namespace: ClassVar[str] = "test_subject"
 
         handler = MagicMock(spec=BaseMessageHandler)
         handler.event_type = TestEvent
@@ -33,7 +33,7 @@ class TestEventHandlerRegistry:
 
         class AnotherTestEvent(AvroEventModel):
             topic: ClassVar[str] = "another.topic"
-            schema_subject: ClassVar[str] = "another_subject"
+            namespace: ClassVar[str] = "another_subject"
 
         handler = MagicMock(spec=BaseMessageHandler)
         handler.event_type = AnotherTestEvent
@@ -89,7 +89,7 @@ class TestEventHandlerRegistry:
 
         class UnknownEvent(AvroEventModel):
             topic: ClassVar[str] = "unknown.topic"
-            schema_subject: ClassVar[str] = "unknown_subject"
+            namespace: ClassVar[str] = "unknown_subject"
 
         assert registry.get_handler(UnknownEvent) is None
 

@@ -10,7 +10,7 @@ import pytest
 from confluent_kafka import Message
 from confluent_kafka.schema_registry import SchemaRegistryClient
 
-from idu_kafka_client.avro import AvroEventModel, AvroSerializerMixin
+from otteroad.avro import AvroEventModel, AvroSerializerMixin
 
 
 class TestIntegrationAvroSerializerMixin:
@@ -25,7 +25,7 @@ class TestIntegrationAvroSerializerMixin:
 
         class UserEvent(AvroEventModel):
             topic: ClassVar[str] = "avro.serializer.events.integration"
-            schema_subject: ClassVar[str] = "avro_serializer.integration"
+            namespace: ClassVar[str] = "avro_serializer.integration"
             user_id: UUID
             name: str
             email: str
@@ -42,7 +42,7 @@ class TestIntegrationAvroSerializerMixin:
 
         class ProductEvent(AvroEventModel):
             topic: ClassVar[str] = "product.events.integration"
-            schema_subject: ClassVar[str] = "product_event.integration"
+            namespace: ClassVar[str] = "product_event.integration"
             product_id: UUID
             tags: dict[str, int]
             versions: list[str]
@@ -121,6 +121,7 @@ class TestIntegrationAvroSerializerMixin:
         assert isinstance(deserialized.product_id, UUID)
         assert "electronics" in deserialized.tags
 
+    @pytest.mark.filterwarnings("ignore::UserWarning:pydantic.*")
     def test_error_handling_scenarios(self, serializer, user_model_cls):
         """Test error handling scenarios for serialization and deserialization."""
         # Test for corrupted data

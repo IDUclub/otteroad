@@ -1,18 +1,21 @@
-# 🦉 idu_kafka_client
+# 🦦 otteroad
 
 [![code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
-[![PyPI version](https://badge.fury.io/py/idu-kafka-client.svg)](https://pypi.org/project/idu-kafka-client/)
-[![CI](https://github.com/Jesusya-26/idu_kafka_client/actions/workflows/ci.yml/badge.svg)](https://github.com/your-org/idu_kafka_client/actions)
-[![codecov](https://codecov.io/gh/Jesusya-26/idu_kafka_client/branch/main/graph/badge.svg)](https://codecov.io/gh/your-org/idu_kafka_client)
+[![PyPI version](https://badge.fury.io/py/otteroad.svg)](https://pypi.org/project/otteroad/)
+[![CI](https://github.com/Jesusya-26/otteroad/actions/workflows/ci.yml/badge.svg)](https://github.com/your-org/otteroad/actions)
+[![codecov](https://codecov.io/gh/Jesusya-26/otteroad/branch/main/graph/badge.svg)](https://codecov.io/gh/your-org/otteroad)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](./LICENSE)
 
-> Kafka framework for FastAPI microservices in the IDU (Institute of Design and Urban Studies) project.
+![logo](https://drive.google.com/uc?export=view&id=1DuMT0nrzqfRr3q5kUeki_6q6eI1gs-5m)
 
+> Kafka framework for FastAPI microservices in the IDU ([Institute of Design and Urban Studies](https://idu.itmo.ru/en)).
+>
+> _** The name was inspired by this [text](https://habr.com/ru/articles/563582/)._
 ---
 
 ## ✨ Overview
 
-`idu_kafka_client` is a Kafka framework designed for FastAPI-based microservices. It simplifies integration with Apache Kafka and supports:
+`otteroad` is a Kafka framework designed for FastAPI-based microservices. It simplifies integration with Apache Kafka and supports:
 
 - ✅ Unified consumer & producer APIs
 - ✅ AVRO + Schema Registry support via Pydantic
@@ -26,13 +29,13 @@
 ## 📦 Installation
 
 ```bash
-pip install idu-kafka-client
+pip install otteroad
 ```
 
 Or via poetry:
 
 ```bash
-poetry add idu-kafka-client
+poetry add otteroad
 ```
 
 ---
@@ -47,7 +50,7 @@ Kafka settings are defined via two classes:
 They can be created from any source:
 
 ```python
-from idu_kafka_client import KafkaConsumerSettings, KafkaProducerSettings
+from otteroad import KafkaConsumerSettings, KafkaProducerSettings
 
 consumer_settings = KafkaConsumerSettings.from_env()
 producer_settings = KafkaProducerSettings.from_yaml("config/kafka.yaml")
@@ -65,14 +68,19 @@ Use `AvroEventModel` as the base for your event schemas. These are strict, typed
 
 ```python
 from typing import ClassVar
-from idu_kafka_client.avro import AvroEventModel
+from pydantic import Field
+from otteroad.avro import AvroEventModel
 
-class UserCreatedEvent(AvroEventModel):
-    topic: ClassVar[str] = "users.created"
-    schema_subject: ClassVar[str] = "users.created-value"
 
-    user_id: str
-    name: str
+class TerritoryCreated(AvroEventModel):
+    """Model for message indicates that a territory has been created."""
+
+    topic: ClassVar[str] = "urban.events"
+    namespace: ClassVar[str] = "territories"
+    schema_version: ClassVar[int] = 1
+    schema_compatibility: ClassVar[str] = "BACKWARD"
+
+    territory_id: int = Field(..., description="new territory identifier")
 ```
 
 ---
@@ -81,13 +89,19 @@ class UserCreatedEvent(AvroEventModel):
 
 Handlers process typed events. Extend `BaseMessageHandler` and implement core logic in `handle()`. Optional hooks: `pre_process`, `post_process`, `on_startup`, `on_shutdown`, `handle_error`.
 
-```python
-from idu_kafka_client.consumer import BaseMessageHandler
-from idu_kafka_client.models import UserCreatedEvent
+> ℹ️ **Note for IDU services:** It is strongly recommended to use only models from the `models/` directory to ensure schema consistency and maintainability across services.
 
-class UserCreatedHandler(BaseMessageHandler[UserCreatedEvent]):
+```python
+from otteroad.consumer import BaseMessageHandler
+from otteroad.models import TerritoryCreated  # please, use only models from the models/ directory
+
+class TerritoryCreatedHandler(BaseMessageHandler[TerritoryCreated]):
     async def handle(self, event, ctx):
-        print(f"User created: {event.user_id}")
+        print(f"Territory created: {event.territory_id}")
+        
+    async def on_startup(self): ...
+    
+    async def on_shutdown(self): ...
 ```
 
 ---
@@ -97,11 +111,11 @@ class UserCreatedHandler(BaseMessageHandler[UserCreatedEvent]):
 `KafkaConsumerService` manages lifecycle and worker threads; `KafkaConsumerWorker` pulls messages, resolves handlers and runs processing logic.
 
 ```python
-from idu_kafka_client import KafkaConsumerService
+from otteroad import KafkaConsumerService
 
 service = KafkaConsumerService(consumer_settings)
-service.register_handler(UserCreatedHandler())
-service.add_worker(topics=["users.events"]).start()
+service.register_handler(TerritoryCreatedHandler())
+service.add_worker(topics=["urban.events"]).start()
 ```
 
 Under the hood, the pipeline is:
@@ -119,12 +133,12 @@ If an error occurs, custom error handling or DQL logic can be added.
 Use `KafkaProducerClient` to send strongly typed Avro events:
 
 ```python
-from idu_kafka_client import KafkaProducerClient
-from idu_kafka_client.models import UserCreatedEvent
+from otteroad import KafkaProducerClient
+from otteroad.models import TerritoryCreated
 
 async def send_event():
     async with KafkaProducerClient(producer_settings) as producer:
-        event = UserCreatedEvent(user_id="123", name="Alice")
+        event = TerritoryCreated(territory_id=1)
         await producer.send(event)
 ```
 

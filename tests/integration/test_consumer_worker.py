@@ -12,9 +12,9 @@ from confluent_kafka import Consumer, Message, Producer, TopicPartition
 from confluent_kafka.admin import AdminClient, NewTopic
 from confluent_kafka.schema_registry import SchemaRegistryClient
 
-from idu_kafka_client import BaseMessageHandler, KafkaConsumerSettings
-from idu_kafka_client.avro import AvroEventModel
-from idu_kafka_client.consumer import EventHandlerRegistry, KafkaConsumerWorker
+from otteroad import BaseMessageHandler, KafkaConsumerSettings
+from otteroad.avro import AvroEventModel
+from otteroad.consumer import EventHandlerRegistry, KafkaConsumerWorker
 
 
 class TestIntegrationKafkaConsumerWorker:
@@ -53,7 +53,7 @@ class TestIntegrationKafkaConsumerWorker:
 
         class TestEvent(AvroEventModel):
             topic: ClassVar[str] = test_topic
-            schema_subject: ClassVar[str] = "test_event"
+            namespace: ClassVar[str] = "test_event"
             data: str
 
         return TestEvent

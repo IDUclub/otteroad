@@ -10,14 +10,14 @@ import pytest
 from confluent_kafka import Message
 from confluent_kafka.schema_registry import Schema, SchemaRegistryClient
 
-from idu_kafka_client.avro import AvroEventModel, AvroSerializerMixin
+from otteroad.avro import AvroEventModel, AvroSerializerMixin
 
 
 class MyModel(AvroEventModel):
     """A test model inheriting from AvroEventModel to demonstrate serialization and deserialization."""
 
     topic: ClassVar[str] = "test.topic"
-    schema_subject: ClassVar[str] = "test_subject"
+    namespace: ClassVar[str] = "test_subject"
     field: int
 
 

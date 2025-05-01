@@ -1,0 +1,13 @@
+{
+  "type": "record",
+  "name": "FunctionalZonesUpdated",
+  "namespace": "urban.events.functional_zones",
+  "fields": [
+    {
+      "name": "territory_id",
+      "type": "long",
+      "doc": "territory identifier where zones have been updated"
+    }
+  ],
+  "doc": "Model for message indicates that a functional zones have been updated for territory."
+}

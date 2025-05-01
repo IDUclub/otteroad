@@ -1,0 +1,29 @@
+{
+  "type": "record",
+  "name": "UrbanObjectsUpdated",
+  "namespace": "urban.events.urban_objects",
+  "fields": [
+    {
+      "name": "territory_id",
+      "type": "long",
+      "doc": "territory identifier where objects have been updated"
+    },
+    {
+      "name": "service_types",
+      "type": {
+        "type": "array",
+        "items": "long"
+      },
+      "doc": "list of service types identifiers which have been updated"
+    },
+    {
+      "name": "physical_object_types",
+      "type": {
+        "type": "array",
+        "items": "long"
+      },
+      "doc": "list of physical object types identifiers which have been updated"
+    }
+  ],
+  "doc": "Model for message indicates that urban objects have been updated for territory."
+}

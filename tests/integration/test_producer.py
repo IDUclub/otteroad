@@ -13,9 +13,9 @@ from confluent_kafka.admin import AdminClient, NewTopic
 from confluent_kafka.schema_registry import SchemaRegistryClient
 from pydantic import ValidationError
 
-from idu_kafka_client.avro import AvroEventModel
-from idu_kafka_client.producer import KafkaProducerClient
-from idu_kafka_client.settings import KafkaProducerSettings
+from otteroad.avro import AvroEventModel
+from otteroad.producer import KafkaProducerClient
+from otteroad.settings import KafkaProducerSettings
 
 
 class TestIntegrationKafkaProducerClient:
@@ -54,7 +54,7 @@ class TestIntegrationKafkaProducerClient:
 
         class TestEvent(AvroEventModel):
             topic: ClassVar[str] = "test.events"
-            schema_subject: ClassVar[str] = "test_event"
+            namespace: ClassVar[str] = "test_event"
             data: str
 
         return TestEvent
@@ -96,7 +96,7 @@ class TestIntegrationKafkaProducerClient:
         await producer_client.send(test_event_model(data="schema-test"), topic=test_topic)
 
         # Retrieve schema from the registry
-        latest_schema = schema_registry.get_latest_version("test_event")
+        latest_schema = schema_registry.get_latest_version(test_event_model.schema_subject())
         assert latest_schema is not None
         assert "data" in latest_schema.schema.schema_str  # Assert field is present in schema
 
@@ -168,7 +168,7 @@ class TestIntegrationKafkaProducerClient:
 
         class InvalidEvent(AvroEventModel):
             topic: ClassVar[str] = "invalid.events"
-            schema_subject: ClassVar[str] = "invalid_event"
+            namespace: ClassVar[str] = "invalid_event"
             number: int
 
         with pytest.raises(ValidationError):

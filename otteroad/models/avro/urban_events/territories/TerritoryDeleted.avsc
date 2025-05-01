@@ -1,0 +1,13 @@
+{
+  "type": "record",
+  "name": "TerritoryDeleted",
+  "namespace": "urban.events.territories",
+  "fields": [
+    {
+      "name": "parent_id",
+      "type": "long",
+      "doc": "parent territory identifier for which child territory has been deleted"
+    }
+  ],
+  "doc": "Model for message indicates that a territory has been deleted."
+}

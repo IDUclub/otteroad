@@ -8,7 +8,7 @@ from confluent_kafka import Consumer, Producer, TopicPartition
 from confluent_kafka.admin import AdminClient, NewTopic
 from pydantic import ValidationError
 
-from idu_kafka_client.settings import KafkaConsumerSettings, KafkaProducerSettings
+from otteroad.settings import KafkaConsumerSettings, KafkaProducerSettings
 
 
 class TestIntegrationKafkaSettings:

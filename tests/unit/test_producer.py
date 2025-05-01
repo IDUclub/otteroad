@@ -8,19 +8,19 @@ import pytest
 import pytest_asyncio
 from confluent_kafka import KafkaError, KafkaException
 
-from idu_kafka_client import (
+from otteroad import (
     KafkaProducerClient,
     KafkaProducerSettings,
 )
-from idu_kafka_client.avro import AvroEventModel
-from idu_kafka_client.utils import LoggerProtocol
+from otteroad.avro import AvroEventModel
+from otteroad.utils import LoggerProtocol
 
 
 class TestKafkaProducerClient:
     @pytest.fixture(autouse=True)
     def mock_schema_registry_client(self):
         """Fixture to mock the SchemaRegistryClient."""
-        with patch("idu_kafka_client.producer.producer.SchemaRegistryClient") as mock_client_cls:
+        with patch("otteroad.producer.producer.SchemaRegistryClient") as mock_client_cls:
             mock_client_instance = MagicMock()
             mock_client_cls.return_value = mock_client_instance
             yield mock_client_instance
@@ -45,7 +45,7 @@ class TestKafkaProducerClient:
 
         class TestEvent(AvroEventModel):
             topic: ClassVar[str] = "test.topic"
-            schema_subject: ClassVar[str] = "test_event"
+            namespace: ClassVar[str] = "test_event"
             data: str
 
         return TestEvent(data="test")
@@ -53,7 +53,7 @@ class TestKafkaProducerClient:
     @pytest_asyncio.fixture
     async def producer_client(self, mock_producer_settings, mock_logger):
         """Fixture for creating an instance of KafkaProducerClient for async tests."""
-        with patch("idu_kafka_client.producer.producer.Producer") as mock_producer:
+        with patch("otteroad.producer.producer.Producer") as mock_producer:
             client = KafkaProducerClient(producer_settings=mock_producer_settings, logger=mock_logger)
             client._producer = mock_producer.return_value
             yield client
@@ -63,8 +63,8 @@ class TestKafkaProducerClient:
     async def test_initialization(self, mock_producer_settings, mock_logger):
         """Test the initialization of the KafkaProducerClient."""
         with (
-            patch("idu_kafka_client.producer.producer.Producer") as mock_producer,
-            patch("idu_kafka_client.producer.producer.SchemaRegistryClient") as mock_sr,
+            patch("otteroad.producer.producer.Producer") as mock_producer,
+            patch("otteroad.producer.producer.SchemaRegistryClient") as mock_sr,
         ):
             KafkaProducerClient(mock_producer_settings, mock_logger)
             mock_sr.assert_called_once()

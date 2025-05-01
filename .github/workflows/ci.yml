@@ -27,9 +27,17 @@ jobs:
       - name: Install dependencies
         run: poetry install --with dev
 
+      - name: Cache Poetry dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/pypoetry
+            .venv
+          key: poetry-${{ hashFiles('poetry.lock') }}
+
       - name: Run pylint
         run: |
-          poetry run pylint idu_kafka_client --exit-zero > pylint-report.txt
+          poetry run pylint otteroad > pylint-report.txt
 
       - name: Upload pylint report
         uses: actions/upload-artifact@v4
@@ -39,11 +47,11 @@ jobs:
 
       - name: Run isort
         run: |
-          poetry run isort --check-only idu_kafka_client
+          poetry run isort --check-only otteroad
 
       - name: Run black
         run: |
-          poetry run black --check idu_kafka_client
+          poetry run black --check otteroad
 
   test:
     runs-on: ubuntu-latest
@@ -58,13 +66,16 @@ jobs:
           KAFKA_ENABLE_KRAFT: "yes"
           KAFKA_PROCESS_ROLES: "broker,controller"
           KAFKA_NODE_ID: 1
-          CLUSTER_ID: random_cluster_id
+          CLUSTER_ID: ${{ github.run_id }}
           KAFKA_LISTENERS: "INTERNAL://:29092,CONTROLLER://:29093,EXTERNAL://:9092"
           KAFKA_ADVERTISED_LISTENERS: "INTERNAL://kafka:29092,EXTERNAL://localhost:9092"
           KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT"
           KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka:29093"
           KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
           KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+          KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+          KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+          KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
           ALLOW_PLAINTEXT_LISTENER: "yes"
         options: --name kafka --hostname kafka
 
@@ -79,27 +90,17 @@ jobs:
         options: --name schema-registry --hostname schema-registry
 
     steps:
-      - name: Wait for Kafka to be ready
+      - name: Check Kafka availability
         run: |
-          for i in {1..50}; do
-            echo "Checking Kafka availability..."
-            docker exec kafka kafka-topics.sh --bootstrap-server kafka:29092 --list && break
-            sleep 2
-          done
+          docker exec kafka /usr/bin/kafka-topics --bootstrap-server localhost:9092 --list
 
       - name: Wait for Schema Registry to be ready
         run: |
-          for i in {1..50}; do
+          for i in {1..30}; do
             echo "Checking Schema Registry availability..."
             curl -sf http://localhost:8081/subjects && break
             sleep 2
           done
-
-      - name: Show Kafka logs
-        run: docker logs kafka --tail 200
-
-      - name: Show Schema Registry logs
-        run: docker logs schema-registry --tail 200
 
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -117,13 +118,20 @@ jobs:
       - name: Install dependencies
         run: poetry install --with dev
 
+      - name: Cache Poetry dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/pypoetry
+            .venv
+          key: poetry-${{ hashFiles('poetry.lock') }}
 
       - name: Run tests with coverage
         run: |
-          poetry run pytest tests --cov=idu_kafka_client --cov-report=xml
+          poetry run pytest tests --cov=otteroad --cov-report=xml
 
       - name: Upload coverage report
-        uses: actions/upload-artifact@v4.6.1
+        uses: actions/upload-artifact@v4
         with:
           name: coverage-report
           path: coverage.xml
@@ -133,4 +141,4 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           file: coverage.xml
-          slug: Jesusya-26/idu_kafka_client
+          slug: Jesusya-26/otteroad

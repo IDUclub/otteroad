@@ -6,10 +6,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from idu_kafka_client.avro import AvroEventModel
-from idu_kafka_client.consumer import BaseMessageHandler, KafkaConsumerService, KafkaConsumerWorker
-from idu_kafka_client.settings import KafkaConsumerSettings
-from idu_kafka_client.utils import LoggerProtocol
+from otteroad.avro import AvroEventModel
+from otteroad.consumer import BaseMessageHandler, KafkaConsumerService, KafkaConsumerWorker
+from otteroad.settings import KafkaConsumerSettings
+from otteroad.utils import LoggerProtocol
 
 
 class TestKafkaConsumerService:
@@ -48,7 +48,7 @@ class TestKafkaConsumerService:
     @pytest.fixture(autouse=True)
     def mock_schema_registry_client(self):
         """Fixture for mocking the schema registry client."""
-        with patch("idu_kafka_client.consumer.service.SchemaRegistryClient") as mock_client_cls:
+        with patch("otteroad.consumer.service.SchemaRegistryClient") as mock_client_cls:
             mock_client_instance = MagicMock()
             mock_client_cls.return_value = mock_client_instance
             yield mock_client_instance
@@ -145,7 +145,7 @@ class TestKafkaConsumerService:
 
         class TestEvent(AvroEventModel):
             topic: ClassVar[str] = "test"
-            schema_subject: ClassVar[str] = "test"
+            namespace: ClassVar[str] = "test"
 
         handler = MagicMock(spec=BaseMessageHandler)
         handler.event_type = TestEvent
@@ -161,7 +161,7 @@ class TestKafkaConsumerService:
 
         class TestEvent(AvroEventModel):
             topic: ClassVar[str] = "test"
-            schema_subject: ClassVar[str] = "test"
+            namespace: ClassVar[str] = "test"
 
         handler = MagicMock(spec=BaseMessageHandler)
         handler.event_type = TestEvent

@@ -176,6 +176,4 @@ cython_debug/
 
 .idea/
 
-.pylintrc
-
 kafka.docker-compose.yaml

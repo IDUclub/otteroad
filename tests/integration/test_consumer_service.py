@@ -11,12 +11,12 @@ import pytest_asyncio
 from confluent_kafka import Producer
 from confluent_kafka.admin import AdminClient, NewTopic
 
-from idu_kafka_client import (
+from otteroad import (
     BaseMessageHandler,
     KafkaConsumerService,
     KafkaConsumerSettings,
 )
-from idu_kafka_client.avro import AvroEventModel
+from otteroad.avro import AvroEventModel
 
 
 class TestIntegrationKafkaConsumerService:
@@ -50,7 +50,7 @@ class TestIntegrationKafkaConsumerService:
 
         class TestEvent(AvroEventModel):
             topic: ClassVar[str] = "test.events"
-            schema_subject: ClassVar[str] = "test_event_service"
+            namespace: ClassVar[str] = "test_event_service"
             data: str
 
         return TestEvent
@@ -167,7 +167,7 @@ class TestIntegrationKafkaConsumerService:
 
         class TestEvent(AvroEventModel):
             topic: ClassVar[str] = "test.events"
-            schema_subject: ClassVar[str] = "test_event_service"
+            namespace: ClassVar[str] = "test_event_service"
             schema_version: ClassVar[int] = 2
             data: str
             new_field: int = 0

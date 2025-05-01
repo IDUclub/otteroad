@@ -8,7 +8,7 @@ import pytest_asyncio
 from confluent_kafka import Consumer, Message
 from confluent_kafka.schema_registry import SchemaRegistryClient
 
-from idu_kafka_client.consumer import EventHandlerRegistry, KafkaConsumerWorker
+from otteroad.consumer import EventHandlerRegistry, KafkaConsumerWorker
 
 
 class TestKafkaConsumerWorker:
@@ -52,7 +52,7 @@ class TestKafkaConsumerWorker:
     @pytest_asyncio.fixture
     async def consumer_worker(self, mock_schema_registry, mock_handler_registry, mock_kafka_consumer):
         """Fixture for setting up a KafkaConsumerWorker instance."""
-        with patch("idu_kafka_client.consumer.worker.Consumer", return_value=mock_kafka_consumer):
+        with patch("otteroad.consumer.worker.Consumer", return_value=mock_kafka_consumer):
             worker = KafkaConsumerWorker(
                 consumer_config={
                     "bootstrap.servers": "localhost:9092",

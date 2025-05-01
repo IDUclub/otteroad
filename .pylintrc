@@ -512,13 +512,6 @@ overgeneral-exceptions=builtins.Exception
 # versions 3.7 - 3.9
 runtime-typing = no
 
-
-[DEPRECATED_BUILTINS]
-
-# List of builtins function names that should not be used, separated by a comma
-bad-functions=input
-
-
 [REFACTORING]
 
 # Maximum number of nested blocks for function / method body

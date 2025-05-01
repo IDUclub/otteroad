@@ -7,7 +7,7 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
-from idu_kafka_client.settings.base import KafkaBaseSettings
+from otteroad.settings.base import KafkaBaseSettings
 
 
 class TestKafkaBaseSettings:

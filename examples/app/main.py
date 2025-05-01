@@ -2,8 +2,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from handlers import UserCreatedHandler
-from idu_kafka_client import (
+from handlers import TerritoryCreatedHandler
+from otteroad import (
     KafkaConsumerService,
     KafkaConsumerSettings,
     KafkaProducerClient,
@@ -25,8 +25,8 @@ producer: KafkaProducerClient = KafkaProducerClient(producer_settings)
 @asynccontextmanager
 async def lifespan(application: FastAPI):
     # start
-    consumer_service.register_handler(UserCreatedHandler())
-    await consumer_service.add_worker(topics=["users.events"]).start()
+    consumer_service.register_handler(TerritoryCreatedHandler())
+    await consumer_service.add_worker(topics=["urban.events"]).start()
     await producer.start()
 
     yield

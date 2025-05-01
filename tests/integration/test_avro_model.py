@@ -11,7 +11,7 @@ from confluent_kafka.schema_registry import SchemaRegistryClient
 from confluent_kafka.schema_registry.avro import AvroSerializer, SerializationContext
 from pydantic import ValidationError
 
-from idu_kafka_client.avro import AvroEventModel
+from otteroad.avro import AvroEventModel
 
 
 class TestIntegrationAvroEventModel:
@@ -25,8 +25,8 @@ class TestIntegrationAvroEventModel:
         """Fixture to define the `UserEvent` model class for testing."""
 
         class UserEvent(AvroEventModel):
-            topic: ClassVar[str] = "avro.model.events.integration"
-            schema_subject: ClassVar[str] = "avro_model.integration"
+            topic: ClassVar[str] = "avro.model.events"
+            namespace: ClassVar[str] = "integration"
             schema_compatibility: ClassVar[str] = "FULL"
             user_id: UUID
             action: str
@@ -42,12 +42,12 @@ class TestIntegrationAvroEventModel:
 
         class ComplexEvent(AvroEventModel):
             class NestedEvent(AvroEventModel):
-                topic: ClassVar[str] = "nested.events.integration"
-                schema_subject: ClassVar[str] = "nested_event.integration"
+                topic: ClassVar[str] = "nested.events"
+                namespace: ClassVar[str] = "integration"
                 value: str
 
-            topic: ClassVar[str] = "complex.events.integration"
-            schema_subject: ClassVar[str] = "complex_event.integration"
+            topic: ClassVar[str] = "complex.events"
+            namespace: ClassVar[str] = "integration"
             event_id: UUID
             nested: NestedEvent
             sequence: list[int]
@@ -169,7 +169,7 @@ class TestIntegrationAvroEventModel:
         user_event_cls.register_schema(schema_registry)
 
         # Test schema incompatibility
-        class IncompatibleEvent(user_event_cls):
+        class UserEvent(user_event_cls):
             @classmethod
             def avro_schema(cls):
                 """Modify the schema by removing the 'action' field."""
@@ -179,7 +179,7 @@ class TestIntegrationAvroEventModel:
                 return schema_copy
 
         # Check that the new schema is incompatible
-        assert not IncompatibleEvent.is_compatible_with(schema_registry)
+        assert not UserEvent.is_compatible_with(schema_registry)
 
     def test_serialization_performance(self, schema_registry, user_event_cls, benchmark):
         """Benchmark the performance of serializing a large number of events."""

@@ -1,8 +1,11 @@
-from idu_kafka_client.consumer import BaseMessageHandler
+from otteroad.consumer import BaseMessageHandler
+from otteroad.models import TerritoryCreated  # please, use only models from the models/ directory
 
-from models import UserCreatedEvent
 
-
-class UserCreatedHandler(BaseMessageHandler[UserCreatedEvent]):
+class TerritoryCreatedHandler(BaseMessageHandler[TerritoryCreated]):
     async def handle(self, event, ctx):
-        print(f"[Kafka] User created: {event.user_id}")
+        print(f"Territory created: {event.territory_id}")
+
+    async def on_startup(self): ...
+
+    async def on_shutdown(self): ...

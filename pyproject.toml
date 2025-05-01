@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "idu-kafka-client"
+name = "otteroad"
 version = "0.1.0"
 description = "Framework with scalable Kafka consumer/producer logic for IDU FastAPI services."
 authors = ["Ruslan Babayev <rus.babaef@yandex.ru>"]
@@ -7,7 +7,7 @@ readme = "README.md"
 license = "Apache-2.0"
 
 [tool.poetry.dependencies]
-python = "^3.11"
+python = "^3.10"
 pydantic = "^2.11.3"
 pyyaml = "^6.0.2"
 python-dotenv = "^1.1.0"
@@ -22,6 +22,7 @@ pytest = "^8.3.5"
 pytest-asyncio = "^0.26.0"
 pytest-benchmark = "^5.1.0"
 pytest-coverage = "^0.0"
+argparse = "^1.4.0"
 
 [tool.black]
 line-length = 120

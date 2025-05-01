@@ -7,8 +7,8 @@ import pytest
 from confluent_kafka import Message
 from pydantic import BaseModel
 
-from idu_kafka_client.consumer.handlers import BaseMessageHandler
-from idu_kafka_client.utils import LoggerProtocol
+from otteroad.consumer.handlers import BaseMessageHandler
+from otteroad.utils import LoggerProtocol
 
 
 class TestBaseMessageHandler:

@@ -14,7 +14,7 @@ from confluent_kafka.schema_registry import SchemaRegistryClient
 from confluent_kafka.schema_registry.schema_registry_client import Schema
 from pydantic import ValidationError
 
-from idu_kafka_client.avro import AvroEventModel
+from otteroad.avro import AvroEventModel
 
 
 class MyEnum(Enum):
@@ -28,7 +28,7 @@ class UserEvent(AvroEventModel):
     """Example Avro Event Model: User Event with UUID, string action, and timestamp."""
 
     topic: ClassVar[str] = "user.events"
-    schema_subject: ClassVar[str] = "user_event"
+    namespace: ClassVar[str] = "user_event"
     user_id: UUID
     action: str
     timestamp: datetime
@@ -39,7 +39,7 @@ class NestedModel(AvroEventModel):
     """Nested model used in a more complex event."""
 
     topic: ClassVar[str] = "nested.events"
-    schema_subject: ClassVar[str] = "nested_event"
+    namespace: ClassVar[str] = "nested_event"
     value: str
 
 
@@ -47,7 +47,7 @@ class EnumModel(AvroEventModel):
     """Example using Enum as a field."""
 
     topic: ClassVar[str] = "enum.events"
-    schema_subject: ClassVar[str] = "enum_event"
+    namespace: ClassVar[str] = "enum_event"
     enum_field: MyEnum
 
 
@@ -55,7 +55,7 @@ class ComplexModel(AvroEventModel):
     """Complex model using other models."""
 
     topic: ClassVar[str] = "complex.events"
-    schema_subject: ClassVar[str] = "complex_event"
+    namespace: ClassVar[str] = "complex_event"
     nested: NestedModel
     ids: list[UUID]
     metadata: dict[str, int]
@@ -90,7 +90,7 @@ class TestAvroEventModel:
 
         assert schema["type"] == "record"
         assert schema["name"] == "UserEvent"
-        assert schema["namespace"] == "user.events.test_avro_model"
+        assert schema["namespace"] == "user.events.user_event"
 
         fields = {f["name"]: f["type"] for f in schema["fields"]}
         assert fields["user_id"] == {"type": "string", "logicalType": "uuid"}
@@ -190,7 +190,7 @@ class TestAvroEventModel:
 
         class InvalidModel(AvroEventModel):
             topic: ClassVar[str] = "invalid.events"
-            schema_subject: ClassVar[str] = "invalid_event"
+            namespace: ClassVar[str] = "invalid_event"
             value: complex  # Unsupported type
 
         # Get schema and check 'value' field type is 'string'
@@ -219,7 +219,7 @@ class TestAvroEventModel:
 
         class DateModel(AvroEventModel):
             topic: ClassVar[str] = "date.events"
-            schema_subject: ClassVar[str] = "date_event"
+            namespace: ClassVar[str] = "date_event"
             d: date
 
         test_date = date(2023, 1, 1)
@@ -241,7 +241,7 @@ class TestAvroEventModel:
 
         class DefaultModel(AvroEventModel):
             topic: ClassVar[str] = "default.events"
-            schema_subject: ClassVar[str] = "default_event"
+            namespace: ClassVar[str] = "default_event"
             field: str = "default_value"
 
         schema = DefaultModel.avro_schema()

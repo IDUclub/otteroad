@@ -1,0 +1,23 @@
+{
+  "type": "record",
+  "name": "RegionalScenarioIndicatorsUpdated",
+  "namespace": "scenario.events.regional_scenarios",
+  "fields": [
+    {
+      "name": "scenario_id",
+      "type": "long",
+      "doc": "regional scenario identifier for which indicator value has been updated"
+    },
+    {
+      "name": "territory_id",
+      "type": "long",
+      "doc": "region territory identifier for which scenario has been created"
+    },
+    {
+      "name": "indicator_id",
+      "type": "long",
+      "doc": "updated indicator identifier for which value has been updated"
+    }
+  ],
+  "doc": "Model for message indicates that an indicator value has been updated for regional scenario."
+}

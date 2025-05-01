@@ -11,7 +11,7 @@ from confluent_kafka import Consumer, Message, Producer
 from confluent_kafka.admin import AdminClient, NewTopic
 from pydantic import BaseModel
 
-from idu_kafka_client.consumer.handlers import BaseMessageHandler
+from otteroad.consumer.handlers import BaseMessageHandler
 
 
 class TestIntegrationBaseMessageHandler:

@@ -7,9 +7,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from confluent_kafka import Message
 
-from idu_kafka_client.avro import AvroEventModel
-from idu_kafka_client.consumer.handlers import BaseMessageHandler, EventHandlerRegistry
-from idu_kafka_client.utils import LoggerProtocol
+from otteroad.avro import AvroEventModel
+from otteroad.consumer.handlers import BaseMessageHandler, EventHandlerRegistry
+from otteroad.utils import LoggerProtocol
 
 
 class TestIntegrationEventHandlerRegistry:
@@ -33,7 +33,7 @@ class TestIntegrationEventHandlerRegistry:
 
         class UserCreatedEvent(AvroEventModel):
             topic: ClassVar[str] = "user.events"
-            schema_subject: ClassVar[str] = "user_created"
+            namespace: ClassVar[str] = "user_created"
             user_id: str
             email: str
 
@@ -45,7 +45,7 @@ class TestIntegrationEventHandlerRegistry:
 
         class OrderCreatedEvent(AvroEventModel):
             topic: ClassVar[str] = "order.events"
-            schema_subject: ClassVar[str] = "order_created"
+            namespace: ClassVar[str] = "order_created"
             order_id: str
             amount: float
 
