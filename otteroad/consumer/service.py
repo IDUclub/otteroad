@@ -16,7 +16,7 @@ from otteroad.consumer.handlers.base import BaseMessageHandler
 from otteroad.consumer.handlers.registry import EventHandlerRegistry
 from otteroad.consumer.worker import KafkaConsumerWorker
 from otteroad.settings import KafkaConsumerSettings
-from otteroad.utils import LoggerProtocol
+from otteroad.utils import LoggerAdapter, LoggerProtocol
 
 
 class KafkaConsumerService:
@@ -38,8 +38,10 @@ class KafkaConsumerService:
         self,
         consumer_settings: KafkaConsumerSettings,
         logger: LoggerProtocol | None = None,
+        disable_internal_kafka_logs: bool = False,
     ):
-        self._logger = logger or logging.getLogger(__name__)
+        self._logger = LoggerAdapter(logger or logging.getLogger(__name__))
+        self._logger_config = {"logger": self._logger, "log_level": logging.INFO if disable_internal_kafka_logs else 0}
         self._settings = consumer_settings
         self._handler_registry = EventHandlerRegistry()
         self._workers: list[KafkaConsumerWorker] = []
@@ -70,6 +72,7 @@ class KafkaConsumerService:
         config = self._settings.get_config().copy()
         if consumer_settings:
             config.update(consumer_settings)
+        config.update(self._logger_config)
 
         # Create and register worker
         worker = KafkaConsumerWorker(
@@ -81,13 +84,13 @@ class KafkaConsumerService:
         )
 
         self._workers.append(worker)
-        self._logger.info("Created worker for topics: %s", ", ".join(topic_list))
+        self._logger.info("Created worker for topics", topics=", ".join(topic_list))
 
         return self
 
     async def start(self) -> None:
         """Start all registered consumer workers."""
-        self._logger.info("Initializing %d consumer workers", len(self._workers))
+        self._logger.info("Initializing consumer workers", num_workers=len(self._workers))
         for worker in self._workers:
             await worker.start()
         self._logger.debug("All workers started successfully")
@@ -108,7 +111,7 @@ class KafkaConsumerService:
             handler: Message handler instance to register
         """
         self._handler_registry.register(handler)
-        self._logger.info("Registered handler for event type: %s", handler.event_type.__name__)
+        self._logger.info("Registered handler for event", event_type=handler.event_type.__name__)
 
     def unregister_handler(self, event_type: type[AvroEventModel] | str) -> None:
         """
@@ -119,4 +122,4 @@ class KafkaConsumerService:
         """
         self._handler_registry.unregister(event_type)
         type_name = event_type.__name__ if isinstance(event_type, type) else str(event_type)
-        self._logger.info("Unregistered handler for: %s", type_name)
+        self._logger.info("Unregistered handler", event_type=type_name)

@@ -1,0 +1,204 @@
+x-kafka-env: &kafka-env
+  KAFKA_ENABLE_KRAFT: "yes"
+  KAFKA_PROCESS_ROLES: "broker,controller"
+  KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT"
+  KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka1:29093,2@kafka2:29093,3@kafka3:29093"
+  KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+  KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+  KAFKA_LOG_DIRS: /var/lib/kafka/data
+  ALLOW_PLAINTEXT_LISTENER: "yes"
+
+services:
+  cluster-init:
+    image: confluentinc/cp-kafka:7.9.0
+    container_name: cluster-init
+    user: root
+    entrypoint: >
+      bash -c "
+        CLUSTER_ID=$$(kafka-storage random-uuid) &&
+        echo \"Using CLUSTER_ID=$$CLUSTER_ID\" &&
+        echo $$CLUSTER_ID > /mnt/kafka-cluster-id/id &&
+        cat /mnt/kafka-cluster-id/id
+      "
+    volumes:
+      - kafka-cluster-id:/mnt/kafka-cluster-id
+    networks:
+      - kafka-net
+
+  kafka1:
+    image: confluentinc/cp-kafka:7.9.0
+    container_name: kafka1
+    hostname: kafka1
+    restart: on-failure
+    depends_on:
+      cluster-init:
+        condition: service_completed_successfully
+    ports:
+      - "9092:9092"
+    entrypoint: >
+      bash -c "
+        export CLUSTER_ID=$$(cat /mnt/kafka-cluster-id/id) &&
+        /etc/confluent/docker/configure &&
+        kafka-storage format --ignore-formatted -t $$CLUSTER_ID -c /etc/kafka/kafka.properties &&
+        /etc/confluent/docker/run
+      "
+    environment:
+      KAFKA_ENABLE_KRAFT: "yes"
+      KAFKA_PROCESS_ROLES: "broker,controller"
+      KAFKA_NODE_ID: 1
+
+      KAFKA_LISTENERS: "INTERNAL://:29092,CONTROLLER://:29093,EXTERNAL://:9092"
+      KAFKA_ADVERTISED_LISTENERS: "INTERNAL://kafka1:29092,EXTERNAL://localhost:9092"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka1:29093,2@kafka2:29093,3@kafka3:29093"
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      ALLOW_PLAINTEXT_LISTENER: "yes"
+    volumes:
+      - kafka1-data:/var/lib/kafka/data
+      - kafka-cluster-id:/mnt/kafka-cluster-id:ro
+    networks:
+      - kafka-net
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "kafka1:29092"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kafka2:
+    image: confluentinc/cp-kafka:7.9.0
+    container_name: kafka2
+    hostname: kafka2
+    restart: on-failure
+    depends_on:
+      cluster-init:
+        condition: service_completed_successfully
+    ports:
+      - "9093:9093"
+    entrypoint: >
+      bash -c "
+        export CLUSTER_ID=$$(cat /mnt/kafka-cluster-id/id) &&
+        /etc/confluent/docker/configure &&
+        kafka-storage format --ignore-formatted -t $$CLUSTER_ID -c /etc/kafka/kafka.properties &&
+        /etc/confluent/docker/run
+      "
+    environment:
+      <<: *kafka-env
+      KAFKA_NODE_ID: 2
+      KAFKA_LISTENERS: "INTERNAL://:29092,CONTROLLER://:29093,EXTERNAL://:9093"
+      KAFKA_ADVERTISED_LISTENERS: "INTERNAL://kafka2:29092,EXTERNAL://localhost:9093"
+    volumes:
+      - kafka2-data:/var/lib/kafka/data
+      - kafka-cluster-id:/mnt/kafka-cluster-id:ro
+    networks:
+      - kafka-net
+    healthcheck:
+      test: [ "CMD", "kafka-broker-api-versions", "--bootstrap-server", "kafka2:29092" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kafka3:
+    image: confluentinc/cp-kafka:7.9.0
+    container_name: kafka3
+    hostname: kafka3
+    restart: on-failure
+    depends_on:
+      cluster-init:
+        condition: service_completed_successfully
+    ports:
+      - "9094:9094"
+    entrypoint: >
+      bash -c "
+        export CLUSTER_ID=$$(cat /mnt/kafka-cluster-id/id) &&
+        /etc/confluent/docker/configure &&
+        kafka-storage format --ignore-formatted -t $$CLUSTER_ID -c /etc/kafka/kafka.properties &&
+        /etc/confluent/docker/run
+      "
+    environment:
+      <<: *kafka-env
+      KAFKA_NODE_ID: 3
+      KAFKA_LISTENERS: "INTERNAL://:29092,CONTROLLER://:29093,EXTERNAL://:9094"
+      KAFKA_ADVERTISED_LISTENERS: "INTERNAL://kafka3:29092,EXTERNAL://localhost:9094"
+    volumes:
+      - kafka3-data:/var/lib/kafka/data
+      - kafka-cluster-id:/mnt/kafka-cluster-id:ro
+    networks:
+      - kafka-net
+    healthcheck:
+      test: [ "CMD", "kafka-broker-api-versions", "--bootstrap-server", "kafka3:29092" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kafka-init:
+    image: confluentinc/cp-kafka:7.9.0
+    container_name: kafka-init
+    depends_on:
+      kafka1:
+        condition: service_healthy
+    entrypoint: >
+      bash -c "
+        echo 'Waiting for Kafka to be ready...' &&
+        sleep 10 &&
+        for topic in urban.events scenario.events graph.events restorator.events soika.events; do
+          kafka-topics --bootstrap-server kafka1:29092 --create --if-not-exists --topic $$topic --partitions 1 --replication-factor 1 &&
+          echo \"Created topic: $$topic\"
+        done
+      "
+    networks:
+      - kafka-net
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:v0.7.1
+    container_name: kafka-ui
+    restart: on-failure
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_BOOTSTRAP_SERVERS: "kafka1:29092,kafka2:29092,kafka3:29092"
+      KAFKA_CLUSTERS_0_NAME: "test-cluster"
+    depends_on:
+      kafka1:
+        condition: service_healthy
+      kafka2:
+        condition: service_healthy
+      kafka3:
+        condition: service_healthy
+    networks:
+      - kafka-net
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.4.0
+    container_name: schema-registry
+    hostname: schema-registry
+    restart: on-failure
+    ports:
+      - "8081:8081"
+    environment:
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: "kafka1:29092,kafka2:29092,kafka3:29092"
+      SCHEMA_REGISTRY_LISTENERS: "http://0.0.0.0:8081"
+      SCHEMA_REGISTRY_HOST_NAME: "schema-registry"
+    depends_on:
+      kafka1:
+        condition: service_healthy
+      kafka2:
+        condition: service_healthy
+      kafka3:
+        condition: service_healthy
+    networks:
+      - kafka-net
+
+volumes:
+  kafka1-data:
+    name: kafka1
+  kafka2-data:
+    name: kafka2
+  kafka3-data:
+    name: kafka3
+  kafka-cluster-id:
+
+networks:
+  kafka-net:
+    driver: bridge

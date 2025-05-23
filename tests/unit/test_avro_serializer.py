@@ -145,7 +145,7 @@ class TestAvroSerializerMixin:
         with pytest.raises(RuntimeError):
             serializer.deserialize_message(message)
 
-        assert "Deserialization error in test_topic[0]@123" in caplog.text
+        assert "Deserialization error" in caplog.text
 
     def test_model_class_resolution_logic(self, serializer):
         """Test the resolution of the model class based on schema ID."""

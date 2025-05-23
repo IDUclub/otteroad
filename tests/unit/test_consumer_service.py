@@ -9,7 +9,7 @@ import pytest
 from otteroad.avro import AvroEventModel
 from otteroad.consumer import BaseMessageHandler, KafkaConsumerService, KafkaConsumerWorker
 from otteroad.settings import KafkaConsumerSettings
-from otteroad.utils import LoggerProtocol
+from otteroad.utils import LoggerAdapter
 
 
 class TestKafkaConsumerService:
@@ -26,7 +26,7 @@ class TestKafkaConsumerService:
     @pytest.fixture
     def mock_logger(self):
         """Fixture for mocking a logger."""
-        logger = MagicMock(spec=LoggerProtocol)
+        logger = MagicMock(spec=LoggerAdapter)
         logger.info = MagicMock()
         logger.debug = MagicMock()
         logger.error = MagicMock()
@@ -35,7 +35,9 @@ class TestKafkaConsumerService:
     @pytest.fixture
     def service(self, mock_consumer_settings, mock_logger):
         """Fixture for KafkaConsumerService instance."""
-        return KafkaConsumerService(consumer_settings=mock_consumer_settings, logger=mock_logger)
+        service = KafkaConsumerService(consumer_settings=mock_consumer_settings)
+        service._logger = mock_logger.return_value
+        return service
 
     @pytest.fixture
     def mock_worker(self):
@@ -65,7 +67,7 @@ class TestKafkaConsumerService:
         mock_logger.info.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_add_worker_single_topic(self, service, mock_logger):
+    async def test_add_worker_single_topic(self, service):
         """Test adding a worker for a single topic."""
         result = service.add_worker("test-topic")
 
@@ -74,17 +76,17 @@ class TestKafkaConsumerService:
         assert len(service._workers) == 1
         worker = service._workers[0]
         assert isinstance(worker, KafkaConsumerWorker)
-        mock_logger.info.assert_called_with("Created worker for topics: %s", "test-topic")
+        service._logger.info.assert_called_with("Created worker for topics", topics="test-topic")
 
     @pytest.mark.asyncio
-    async def test_add_worker_multiple_topics(self, service, mock_logger):
+    async def test_add_worker_multiple_topics(self, service):
         """Test adding a worker for multiple topics."""
         result = service.add_worker(["topic1", "topic2"])
 
         # Assert that the worker was successfully added for the specified topics
         assert result is service
         assert len(service._workers) == 1
-        mock_logger.info.assert_called_with("Created worker for topics: %s", "topic1, topic2")
+        service._logger.info.assert_called_with("Created worker for topics", topics="topic1, topic2")
 
     @pytest.mark.asyncio
     async def test_add_worker_with_settings_override(self, service):
@@ -105,7 +107,7 @@ class TestKafkaConsumerService:
         assert "At least one topic must be specified" in str(exc_info.value)
 
     @pytest.mark.asyncio
-    async def test_start_workers(self, service, mock_worker, mock_logger):
+    async def test_start_workers(self, service, mock_worker):
         """Test starting multiple Kafka consumer workers."""
         service._workers = [mock_worker, mock_worker]
 
@@ -113,11 +115,11 @@ class TestKafkaConsumerService:
 
         # Assert that the workers' start methods were called the correct number of times
         assert mock_worker.start.await_count == 2
-        mock_logger.info.assert_any_call("Initializing %d consumer workers", 2)
-        mock_logger.debug.assert_called_with("All workers started successfully")
+        service._logger.info.assert_any_call("Initializing consumer workers", num_workers=2)
+        service._logger.debug.assert_called_with("All workers started successfully")
 
     @pytest.mark.asyncio
-    async def test_stop_workers(self, service, mock_worker, mock_logger):
+    async def test_stop_workers(self, service, mock_worker):
         """Test stopping multiple Kafka consumer workers."""
         service._workers = [mock_worker, mock_worker]
 
@@ -126,10 +128,10 @@ class TestKafkaConsumerService:
         # Assert that the workers' stop methods were called the correct number of times
         assert mock_worker.stop.await_count == 2
         assert len(service._workers) == 0
-        mock_logger.info.assert_any_call("Initiating consumer service shutdown")
-        mock_logger.info.assert_called_with("Shutdown completed successfully")
+        service._logger.info.assert_any_call("Initiating consumer service shutdown")
+        service._logger.info.assert_called_with("Shutdown completed successfully")
 
-    def test_register_handler(self, service, mock_logger):
+    def test_register_handler(self, service):
         """Test registering a message handler."""
         handler = MagicMock(spec=BaseMessageHandler)
         handler.event_type = MagicMock(__name__="TestEvent")
@@ -138,9 +140,9 @@ class TestKafkaConsumerService:
 
         # Assert that the handler is successfully registered
         assert service._handler_registry.handlers
-        mock_logger.info.assert_called_with("Registered handler for event type: %s", "TestEvent")
+        service._logger.info.assert_called_with("Registered handler for event", event_type="TestEvent")
 
-    def test_unregister_handler_by_type(self, service, mock_logger):
+    def test_unregister_handler_by_type(self, service):
         """Test unregistering a handler by event type."""
 
         class TestEvent(AvroEventModel):
@@ -154,9 +156,9 @@ class TestKafkaConsumerService:
         service.unregister_handler(TestEvent)
 
         # Assert that the handler is successfully unregistered by type
-        mock_logger.info.assert_called_with("Unregistered handler for: %s", "TestEvent")
+        service._logger.info.assert_called_with("Unregistered handler", event_type="TestEvent")
 
-    def test_unregister_handler_by_name(self, service, mock_logger):
+    def test_unregister_handler_by_name(self, service):
         """Test unregistering a handler by event type name."""
 
         class TestEvent(AvroEventModel):
@@ -170,7 +172,7 @@ class TestKafkaConsumerService:
         service.unregister_handler(str(TestEvent))
 
         # Assert that the handler is successfully unregistered by name
-        mock_logger.info.assert_called_with("Unregistered handler for: %s", str(TestEvent))
+        service._logger.info.assert_called_with("Unregistered handler", event_type=str(TestEvent))
 
     @pytest.mark.asyncio
     async def test_concurrent_start_stop(self, service):

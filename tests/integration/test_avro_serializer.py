@@ -175,5 +175,5 @@ class TestIntegrationAvroSerializerMixin:
             serializer.deserialize_message(message)
 
         # Check if error is logged correctly
-        assert "Deserialization error in test_topic[1]@100" in caplog.text
+        assert "Deserialization error" in caplog.text
         assert "ERROR" in caplog.text

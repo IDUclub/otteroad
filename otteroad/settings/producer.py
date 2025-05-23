@@ -19,7 +19,6 @@ class KafkaProducerSettings(KafkaBaseSettings):
     Attributes:
         All attributes from KafkaBaseSettings
         acks (str): Broker acknowledgments required: '0', '1', or 'all'.
-        delivery_timeout_ms (int): Total timeout for message delivery (includes retries) in milliseconds.
         queue_buffering_max_messages (int): Max number of messages in the producer queue.
         queue_buffering_max_kbytes (int): Max total message size (KB) in the producer queue.
         linger_ms (int): Delay in milliseconds to wait for batching.
@@ -80,8 +79,8 @@ class KafkaProducerSettings(KafkaBaseSettings):
         if self.enable_idempotence:
             if self.acks != "all":
                 raise ValueError("Idempotence requires acks='all'")
-            if self.max_in_flight > 1:
-                raise ValueError("Idempotence requires max_in_flight=1")
+            if self.max_in_flight > 5:
+                raise ValueError("Idempotence requires max_in_flight=5 or less")
         return self
 
     @model_validator(mode="after")

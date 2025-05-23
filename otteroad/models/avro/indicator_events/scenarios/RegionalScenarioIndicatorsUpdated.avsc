@@ -1,7 +1,7 @@
 {
   "type": "record",
   "name": "RegionalScenarioIndicatorsUpdated",
-  "namespace": "scenario.events.regional_scenarios",
+  "namespace": "indicator.events.scenarios",
   "fields": [
     {
       "name": "scenario_id",

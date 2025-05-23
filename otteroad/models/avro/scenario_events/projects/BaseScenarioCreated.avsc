@@ -1,0 +1,23 @@
+{
+  "type": "record",
+  "name": "BaseScenarioCreated",
+  "namespace": "scenario.events.projects",
+  "fields": [
+    {
+      "name": "project_id",
+      "type": "long",
+      "doc": "unique project identifier"
+    },
+    {
+      "name": "base_scenario_id",
+      "type": "long",
+      "doc": "new project base scenario identifier"
+    },
+    {
+      "name": "regional_scenario_id",
+      "type": "long",
+      "doc": "unique regional scenario identifier for which base scenario was created"
+    }
+  ],
+  "doc": "Model for message indicates that a project's base scenario has been created."
+}

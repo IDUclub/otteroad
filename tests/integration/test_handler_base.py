@@ -188,7 +188,7 @@ class TestIntegrationBaseMessageHandler:
         assert any("Handler shutdown completed" in r.message for r in caplog.records)
 
     @pytest.mark.asyncio
-    async def test_concurrent_processing(self, handler, test_topic, test_event_model):
+    async def test_concurrent_processing(self, handler, test_event_model):
         """Test concurrent message processing."""
         # Generate 500 events
         events = [test_event_model(id=i, data=f"conc_{i}") for i in range(500)]

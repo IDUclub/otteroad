@@ -5,12 +5,12 @@ from pydantic import Field
 from otteroad.avro import AvroEventModel
 
 
-class TerritoryDeleted(AvroEventModel):
-    """Model for message indicates that a territory has been deleted."""
+class TerritoriesUpdated(AvroEventModel):
+    """Model for message indicates that a territories has been created or updated."""
 
     topic: ClassVar[str] = "urban.events"
     namespace: ClassVar[str] = "territories"
     schema_version: ClassVar[int] = 1
     schema_compatibility: ClassVar[str] = "BACKWARD"
 
-    parent_id: int = Field(..., description="parent territory identifier for which child territory has been deleted")
+    territory_ids: list[int] = Field(..., description="list of territories identifiers which were created or updated")

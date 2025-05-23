@@ -1,7 +1,7 @@
 {
   "type": "record",
   "name": "IndicatorValuesUpdated",
-  "namespace": "urban.events.indicators",
+  "namespace": "indicator.events.public",
   "fields": [
     {
       "name": "territory_id",

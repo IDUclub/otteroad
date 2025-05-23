@@ -4,6 +4,7 @@ ensuring type-safe injection of custom logger implementations throughout
 the Kafka client library.
 """
 
+import logging
 from typing import Protocol, runtime_checkable
 
 
@@ -22,3 +23,96 @@ class LoggerProtocol(Protocol):
     def error(self, msg: str, *args, **kwargs) -> None: ...  # pylint: disable=missing-function-docstring
     def exception(self, msg: str, *args, **kwargs) -> None: ...  # pylint: disable=missing-function-docstring
     def critical(self, msg: str, *args, **kwargs) -> None: ...  # pylint: disable=missing-function-docstring
+
+
+class LoggerAdapter:
+    """
+    A universal logger adapter that provides a unified interface for:
+    - built-in `logging` module
+    - `loguru` logger
+    - `structlog` logger
+
+    This allows writing logger.info("message", key1=value1, ...) syntax
+    and ensures structured fields are passed correctly depending on the backend.
+
+    Attributes:
+        _logger (Any): The wrapped logger instance
+        _is_structlog (bool): Whether the logger is structlog
+        _is_loguru (bool): Whether the logger is loguru
+
+    Example:
+        logger = LoggerAdapter(actual_logger)
+        logger.info("Something happened", key1="value", error="details")
+    """
+
+    def __init__(self, logger: LoggerProtocol):
+        self._logger = logger
+        self._is_structlog = self._detect_structlog()
+        self._is_loguru = self._detect_loguru()
+
+    def _detect_structlog(self) -> bool:
+        """
+        Detect whether the logger is a structlog logger
+        (uses .bind() and structured event_dict).
+        """
+        return hasattr(self._logger, "bind") and callable(getattr(self._logger, "bind", None))
+
+    def _detect_loguru(self) -> bool:
+        """
+        Detect whether the logger is from the `loguru` library.
+        """
+        return self._logger.__class__.__module__.startswith("loguru")
+
+    def _log(self, level: str, message: str, **kwargs):
+        """
+        Unified logging method that dispatches to the correct backend.
+
+        Args:
+            level (str): Log level (e.g., 'info', 'error')
+            message (str): Log message string
+            **kwargs: Structured data or special fields (e.g., exc_info=True)
+        """
+        # Extract exc_info if present (used for exception logging)
+        exc_info = kwargs.pop("exc_info", None)
+
+        if self._is_structlog:
+            # structlog supports structured fields directly
+            log_method = getattr(self._logger, level)
+            if exc_info:
+                kwargs["exc_info"] = exc_info
+            log_method(message, **kwargs)
+
+        elif self._is_loguru:
+            # loguru uses `extra` for structured fields; handles exc_info separately
+            log_method = getattr(self._logger, level)
+            if exc_info:
+                log_method(message, extra=kwargs, exception=exc_info)
+            else:
+                log_method(message, extra=kwargs)
+
+        else:
+            # Standard logging.Logger (or compatible): use `extra`
+            log_method = getattr(self._logger, level, None)
+            if log_method is not None:
+                log_method(message, extra=kwargs, exc_info=exc_info)
+            else:
+                # Fallback to .log(levelno)
+                levelno = getattr(logging, level.upper(), logging.INFO)
+                self._logger.info(levelno, message, extra=kwargs, exc_info=exc_info)
+
+    # Public level methods
+
+    def debug(self, msg: str, **kwargs):  # pylint: disable=missing-function-docstring
+        self._log("debug", msg, **kwargs)
+
+    def info(self, msg: str, **kwargs):  # pylint: disable=missing-function-docstring
+        self._log("info", msg, **kwargs)
+
+    def warning(self, msg: str, **kwargs):  # pylint: disable=missing-function-docstring
+        self._log("warning", msg, **kwargs)
+
+    def error(self, msg: str, **kwargs):  # pylint: disable=missing-function-docstring
+        self._log("error", msg, **kwargs)
+
+    def critical(self, msg: str, **kwargs):  # pylint: disable=missing-function-docstring
+        self._log("critical", msg, **kwargs)

@@ -18,7 +18,7 @@ from confluent_kafka.schema_registry import SchemaRegistryClient
 from otteroad.avro.model import AvroEventModel
 from otteroad.avro.serializer import AvroSerializerMixin
 from otteroad.settings import KafkaProducerSettings
-from otteroad.utils import LoggerProtocol
+from otteroad.utils import LoggerAdapter, LoggerProtocol
 
 EventModel = TypeVar("EventModel", bound=AvroEventModel)
 
@@ -54,6 +54,7 @@ class KafkaProducerClient(AvroSerializerMixin):
         producer_settings: KafkaProducerSettings,
         logger: LoggerProtocol | None = None,
         loop: asyncio.AbstractEventLoop | None = None,
+        disable_internal_kafka_logs: bool = False,
     ):
         """
         Initialize Kafka producer client with schema registry.
@@ -66,7 +67,8 @@ class KafkaProducerClient(AvroSerializerMixin):
         Raises:
             RuntimeError: If no event loop available and not running in async context
         """
-        self._logger = logger or logging.getLogger(__name__)
+        self._logger = LoggerAdapter(logger or logging.getLogger(__name__))
+        logger_config = {"logger": self._logger, "log_level": logging.INFO if disable_internal_kafka_logs else 0}
 
         # Initialize schema registry and serialization
         schema_registry = SchemaRegistryClient(producer_settings.get_schema_registry_config())
@@ -74,7 +76,9 @@ class KafkaProducerClient(AvroSerializerMixin):
 
         # Configure Kafka producer with queue limits
         self._settings = producer_settings
-        self._producer = Producer(producer_settings.get_config())
+        config = producer_settings.get_config()
+        config.update(logger_config)
+        self._producer = Producer(config)
 
         # Event loop management
         try:
@@ -128,7 +132,7 @@ class KafkaProducerClient(AvroSerializerMixin):
                 # Process available delivery reports
                 self._producer.poll(self._POLL_INTERVAL)
             except Exception as e:  # pylint: disable=broad-except
-                self._logger.error("Polling error: %s", e, exc_info=True)
+                self._logger.error("Polling error", error=e, exc_info=True)
                 break
 
     async def send(  # pylint: disable=missing-raises-doc
@@ -168,10 +172,12 @@ class KafkaProducerClient(AvroSerializerMixin):
                 if err:
                     exc = KafkaException(err)
                     self._loop.call_soon_threadsafe(future.set_exception, exc)
-                    self._logger.error("Delivery failed for %s: %s", target_topic, str(exc))
+                    self._logger.error("Delivery failed", topic=target_topic, error=str(exc))
                 else:
                     self._loop.call_soon_threadsafe(future.set_result, msg)
-                    self._logger.debug("Message delivered to %s [%d]@%d", msg.topic(), msg.partition(), msg.offset())
+                    self._logger.debug(
+                        "Message delivered", topic=msg.topic(), partition=msg.partition(), offset=msg.offset()
+                    )
 
             # Thread-safe message production
             self._producer.produce(
@@ -179,13 +185,13 @@ class KafkaProducerClient(AvroSerializerMixin):
             )
 
             await asyncio.wait_for(future, timeout)
-            self._logger.info("Message successfully sent to %s", target_topic)
+            self._logger.info("Message successfully sent", topic=target_topic)
 
         except asyncio.TimeoutError as e:
-            self._logger.error("Message delivery timeout to %s", target_topic)
+            self._logger.error("Message delivery timeout", topic=target_topic)
             raise RuntimeError("Message delivery timeout") from e
         except Exception as e:
-            self._logger.error("Failed to send message to %s: %s", target_topic, str(e), exc_info=True)
+            self._logger.error("Failed to send message", topic=target_topic, error=str(e), exc_info=True)
             raise
 
     @staticmethod
@@ -227,7 +233,7 @@ class KafkaProducerClient(AvroSerializerMixin):
             self._logger.warning("Flush operation timed out")
             raise RuntimeError("Flush timeout exceeded") from e
         except Exception as e:
-            self._logger.error("Flush failed: %s", str(e))
+            self._logger.error("Flush failed", error=str(e), exc_info=True)
             raise
 
     async def close(self) -> None:

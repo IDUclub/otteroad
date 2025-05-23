@@ -14,7 +14,7 @@ from confluent_kafka.schema_registry import SchemaRegistryClient
 
 from otteroad.avro.serializer import AvroSerializerMixin
 from otteroad.consumer.handlers.registry import EventHandlerRegistry
-from otteroad.utils import LoggerProtocol
+from otteroad.utils import LoggerAdapter, LoggerProtocol
 
 
 class KafkaConsumerWorker(AvroSerializerMixin):
@@ -68,7 +68,7 @@ class KafkaConsumerWorker(AvroSerializerMixin):
         """
 
         # Use provided logger or module-level logger
-        self._logger = logger or logging.getLogger(__name__)
+        self._logger = LoggerAdapter(logger or logging.getLogger(__name__))
 
         # Initialize base Avro serializer
         super().__init__(schema_registry_client=schema_registry, logger=self._logger)
@@ -128,7 +128,7 @@ class KafkaConsumerWorker(AvroSerializerMixin):
 
         # Schedule the asynchronous processing loop
         self._process_task = self._loop.create_task(self._process_loop())
-        self._logger.info("Consumer started for topics: %s", self._topics)
+        self._logger.info("Consumer started for topics", topics=self._topics)
 
     def _poll_loop(self) -> None:
         """
@@ -148,13 +148,13 @@ class KafkaConsumerWorker(AvroSerializerMixin):
                     continue
 
                 if msg.error():
-                    self._logger.error("Consumer error: %s", msg.error())
+                    self._logger.error("Consumer error", error=msg.error(), exc_info=True)
                     continue
 
                 # Safely enqueue the message for asynchronous processing
                 self._loop.call_soon_threadsafe(self._queue.put_nowait, msg)
         except Exception as e:  # pylint: disable=broad-except
-            self._logger.exception("Critical error in poll loop: %s", e)
+            self._logger.error("Critical error in poll loop", error=e, exc_info=True)
         finally:
             # Ensure the consumer is closed on exit
             self._shutdown_consumer()
@@ -165,11 +165,11 @@ class KafkaConsumerWorker(AvroSerializerMixin):
             try:
                 msg = self._commit_queue.get_nowait()
                 self._consumer.commit(msg, asynchronous=False)
-                self._logger.debug("Committed offset %s", msg.offset())
+                self._logger.debug("Committed offset", offset=msg.offset())
             except queue.Empty:
                 break
             except Exception as e:  # pylint: disable=broad-except
-                self._logger.error("Commit error: %s", e, exc_info=True)
+                self._logger.error("Commit error", error=e, exc_info=True)
 
     def _shutdown_consumer(self) -> None:
         """Safely close Kafka consumer instance."""
@@ -177,7 +177,7 @@ class KafkaConsumerWorker(AvroSerializerMixin):
             self._consumer.close()
             self._logger.info("Kafka consumer closed")
         except Exception as e:  # pylint: disable=broad-except
-            self._logger.error("Error closing consumer: %s", e, exc_info=True)
+            self._logger.error("Error closing consumer", error=e, exc_info=True)
 
     async def stop(self, timeout: float = 5.0) -> None:
         """
@@ -223,7 +223,7 @@ class KafkaConsumerWorker(AvroSerializerMixin):
                 try:
                     await self._handle_message(msg)
                 except Exception as e:  # pylint: disable=broad-except
-                    self._logger.error("Processing error: %s", e, exc_info=True)
+                    self._logger.error("Processing error", error=e, exc_info=True)
                 finally:
                     # Mark message done regardless of success/failure
                     self._queue.task_done()
@@ -247,7 +247,7 @@ class KafkaConsumerWorker(AvroSerializerMixin):
             # Lookup handler based on event type or content
             handler = self._handler_registry.get_handler(event)
             if handler is None:
-                self._logger.info("Handler not found for event: %s", event)
+                self._logger.info("Handler not found for event", event=event)
                 return
 
             # Execute handler, using thread if synchronous
@@ -259,11 +259,11 @@ class KafkaConsumerWorker(AvroSerializerMixin):
         except Exception as e:  # pylint: disable=broad-except
             self._logger.info(msg)
             self._logger.error(
-                "Failed to process message %s[%d]@%d: %s",
-                msg.topic(),
-                msg.partition(),
-                msg.offset(),
-                e,
+                "Failed to process message",
+                topic=msg.topic(),
+                partition=msg.partition(),
+                offset=msg.offset(),
+                error=e,
                 exc_info=True,
             )
         finally:
@@ -294,18 +294,16 @@ class KafkaConsumerWorker(AvroSerializerMixin):
             partitions (List[TopicPartition]): List of assigned partitions.
         """
         try:
-            self._logger.info("Assigned partitions: %s", partitions)
+            self._logger.info("Assigned partitions", partitions=partitions)
 
             # Additional check: partitions exist
             valid_partitions = [p for p in partitions if self._validate_partition(p)]
             if len(valid_partitions) != len(partitions):
-                self._logger.warning(
-                    "Attempted to assign invalid partitions. Valid: %s, All: %s", valid_partitions, partitions
-                )
+                self._logger.warning("Attempted to assign invalid partitions", valid=valid_partitions, all=partitions)
 
             # We assign only valid partitions
             consumer.assign(valid_partitions)
-            self._logger.debug("Partitions assigned successfully: %s", valid_partitions)
+            self._logger.debug("Partitions assigned successfully", valid=valid_partitions)
 
         except KafkaException as e:
             kafka_error = e.args[0]
@@ -313,18 +311,18 @@ class KafkaConsumerWorker(AvroSerializerMixin):
 
             # Обработка специфических ошибок Kafka
             if error_code == KafkaError._ALL_BROKERS_DOWN:
-                self._logger.critical("All brokers unavailable: %s", kafka_error.str())
+                self._logger.critical("All brokers unavailable", error=kafka_error.str())
             elif error_code == KafkaError._UNKNOWN_TOPIC:
-                self._logger.error("Topic does not exist: %s", [p.topic for p in partitions])
+                self._logger.error("Topic does not exist", topics=[p.topic for p in partitions])
             elif error_code == KafkaError._UNKNOWN_PARTITION:
-                self._logger.warning("Invalid partitions: %s", [p.partition for p in partitions])
+                self._logger.warning("Invalid partitions", partitions=[p.partition for p in partitions])
             else:
                 self._logger.error(
-                    "Kafka error during assignment (code=%s): %s", error_code, kafka_error.str(), exc_info=True
+                    "Kafka error during assignment", error_code=error_code, error=kafka_error.str(), exc_info=True
                 )
 
         except Exception as e:  # pylint: disable=broad-exception-caught
-            self._logger.error("Unexpected assignment error: %s", e, exc_info=True)
+            self._logger.error("Unexpected assignment error", error=e, exc_info=True)
 
         finally:
             # Защита состояния потребителя
@@ -333,7 +331,7 @@ class KafkaConsumerWorker(AvroSerializerMixin):
                     self._logger.warning("Consumer has no assigned partitions after assignment attempt")
                     consumer.unassign()
             except Exception as e:  # pylint: disable=broad-exception-caught
-                self._logger.error("Failed to reset consumer state: %s", e)
+                self._logger.error("Failed to reset consumer state", error=e, exc_info=True)
 
     def _on_revoke_sync(self, consumer: Consumer, partitions: list[TopicPartition]) -> None:
         """
@@ -344,19 +342,21 @@ class KafkaConsumerWorker(AvroSerializerMixin):
             partitions (List[TopicPartition]): List of revoked partitions.
         """
         try:
-            self._logger.info("Revoked partitions: %s", partitions)
+            self._logger.info("Revoked partitions", partitions=partitions)
             consumer.commit(offsets=partitions, asynchronous=False)
             self._logger.debug("Offsets committed for revoked partitions")
         except KafkaException as e:
             # Handling the error of missing offsets
             if e.args[0].code() == KafkaError._NO_OFFSET:
-                self._logger.warning("No offsets to commit for partitions: %s. Reason: %s", partitions, e)
+                self._logger.warning(
+                    "No offsets to commit for partitions", partitions=partitions, error=e, exc_info=True
+                )
             else:
-                self._logger.error("Commit error on revoke: %s", e, exc_info=True)
+                self._logger.error("Commit error on revoke", error=e, exc_info=True)
         except Exception as e:  # pylint: disable=broad-exception-caught
-            self._logger.error("Unexpected error during revoke: %s", e, exc_info=True)
+            self._logger.error("Unexpected error during revoke", error=e, exc_info=True)
         finally:
             try:
                 consumer.unassign()
             except Exception as e:  # pylint: disable=broad-exception-caught
-                self._logger.error("Error unassigning partitions: %s", e)
+                self._logger.error("Error unassigning partitions", error=e)

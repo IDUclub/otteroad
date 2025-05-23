@@ -12,11 +12,13 @@ Usage example:
         logger.info("This is a log message")
 
 Exports:
+    - LoggerAdapter: Universal adapter for logging, loguru and structlog.
     - LoggerProtocol: Protocol for a standard logging interface, compatible with Python's logging.Logger.
 """
 
-from .logger import LoggerProtocol
+from .logger import LoggerAdapter, LoggerProtocol
 
 __all__ = [
+    "LoggerAdapter",
     "LoggerProtocol",
 ]

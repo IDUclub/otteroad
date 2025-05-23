@@ -81,8 +81,8 @@ class TestKafkaProducerSettings:
 
         # Invalid max_in_flight
         with pytest.raises(ValidationError) as exc:
-            KafkaProducerSettings(enable_idempotence=True, max_in_flight=2)
-        assert "max_in_flight=1" in str(exc.value)
+            KafkaProducerSettings(enable_idempotence=True, max_in_flight=6)
+        assert "max_in_flight=5" in str(exc.value)
 
     def test_transactional_id_validation(self):
         """Test the validation of 'transactional_id' in KafkaProducerSettings."""

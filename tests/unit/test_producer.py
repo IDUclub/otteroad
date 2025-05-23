@@ -13,7 +13,7 @@ from otteroad import (
     KafkaProducerSettings,
 )
 from otteroad.avro import AvroEventModel
-from otteroad.utils import LoggerProtocol
+from otteroad.utils import LoggerAdapter
 
 
 class TestKafkaProducerClient:
@@ -33,7 +33,7 @@ class TestKafkaProducerClient:
     @pytest.fixture
     def mock_logger(self):
         """Fixture for creating a mock logger that tracks logging calls."""
-        logger = MagicMock(spec=LoggerProtocol)
+        logger = MagicMock(spec=LoggerAdapter)
         logger.debug = MagicMock()
         logger.info = MagicMock()
         logger.error = MagicMock()
@@ -54,32 +54,33 @@ class TestKafkaProducerClient:
     async def producer_client(self, mock_producer_settings, mock_logger):
         """Fixture for creating an instance of KafkaProducerClient for async tests."""
         with patch("otteroad.producer.producer.Producer") as mock_producer:
-            client = KafkaProducerClient(producer_settings=mock_producer_settings, logger=mock_logger)
+            client = KafkaProducerClient(producer_settings=mock_producer_settings)
             client._producer = mock_producer.return_value
+            client._logger = mock_logger.return_value
             yield client
             await client.close()
 
     @pytest.mark.asyncio
-    async def test_initialization(self, mock_producer_settings, mock_logger):
+    async def test_initialization(self, mock_producer_settings):
         """Test the initialization of the KafkaProducerClient."""
         with (
             patch("otteroad.producer.producer.Producer") as mock_producer,
             patch("otteroad.producer.producer.SchemaRegistryClient") as mock_sr,
         ):
-            KafkaProducerClient(mock_producer_settings, mock_logger)
+            KafkaProducerClient(mock_producer_settings)
             mock_sr.assert_called_once()
             mock_producer.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_start_stop_flow(self, producer_client, mock_logger):
+    async def test_start_stop_flow(self, producer_client):
         """Test the start and stop flow of the producer client."""
         await producer_client.start()
         assert producer_client.is_running
-        mock_logger.info.assert_called_with("Producer client started")
+        producer_client._logger.info.assert_called_with("Producer client started")
 
         await producer_client.close()
         assert not producer_client.is_running
-        mock_logger.info.assert_called_with("Producer shutdown completed")
+        producer_client._logger.info.assert_called_with("Producer shutdown completed")
 
     @pytest.mark.asyncio
     async def test_send_message_success(self, producer_client, mock_event):
@@ -97,7 +98,7 @@ class TestKafkaProducerClient:
             producer_client._producer.produce.assert_called_once_with(
                 topic="test.topic", value=b"serialized", key=None, headers=None, on_delivery=ANY
             )
-            producer_client._logger.info.assert_called_with("Message successfully sent to %s", "test.topic")
+            producer_client._logger.info.assert_called_with("Message successfully sent", topic="test.topic")
 
     @pytest.mark.asyncio
     async def test_send_message_timeout(self, producer_client, mock_event):
@@ -114,7 +115,7 @@ class TestKafkaProducerClient:
             await producer_client.send(mock_event, timeout=0.1)
 
         assert "Message delivery timeout" in str(exc_info.value)
-        producer_client._logger.error.assert_any_call("Message delivery timeout to %s", "test.topic")
+        producer_client._logger.error.assert_any_call("Message delivery timeout", topic="test.topic")
 
     @pytest.mark.asyncio
     async def test_flush_behavior(self, producer_client):

@@ -8,8 +8,8 @@ from otteroad.avro import AvroEventModel
 class IndicatorValuesUpdated(AvroEventModel):
     """Model for message indicates that an indicator value has been updated for territory."""
 
-    topic: ClassVar[str] = "urban.events"
-    namespace: ClassVar[str] = "indicators"
+    topic: ClassVar[str] = "indicator.events"
+    namespace: ClassVar[str] = "public"
     schema_version: ClassVar[int] = 1
     schema_compatibility: ClassVar[str] = "BACKWARD"
 

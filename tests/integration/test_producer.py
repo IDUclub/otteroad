@@ -101,7 +101,7 @@ class TestIntegrationKafkaProducerClient:
         assert "data" in latest_schema.schema.schema_str  # Assert field is present in schema
 
     @pytest.mark.asyncio
-    async def test_delivery_timeout(self, test_topic, test_event_model, producer_client):
+    async def test_delivery_timeout(self, test_topic, test_event_model):
         """Test message delivery timeout."""
         invalid_settings = KafkaProducerSettings(bootstrap_servers="invalid:9092")
         client = KafkaProducerClient(invalid_settings)
@@ -163,7 +163,7 @@ class TestIntegrationKafkaProducerClient:
         consumer.close()
 
     @pytest.mark.asyncio
-    async def test_error_handling(self, test_topic, producer_client, caplog):
+    async def test_error_handling(self, test_topic, producer_client):
         """Test error handling when sending an invalid message."""
 
         class InvalidEvent(AvroEventModel):

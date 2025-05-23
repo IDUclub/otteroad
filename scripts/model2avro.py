@@ -20,7 +20,6 @@ def load_models_from_dir(models_dir: str) -> list[type[AvroEventModel]]:
     sys.path.insert(0, str(models_dir_path.parent))
 
     for root, _, files in os.walk(models_dir):  # pylint: disable=too-many-nested-blocks
-        print(root, _, files)
         for file in files:
             if file.endswith(".py") and not file.startswith("__"):
                 module_path = Path(root) / file
