@@ -1,4 +1,4 @@
-"""Integration tests for Kafka settings classes are defined here."""
+"""Unit tests for Kafka settings classes are defined here."""
 
 from typing import Any
 

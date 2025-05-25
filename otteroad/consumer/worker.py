@@ -71,7 +71,7 @@ class KafkaConsumerWorker(AvroSerializerMixin):
         self._logger = LoggerAdapter(logger or logging.getLogger(__name__))
 
         # Initialize base Avro serializer
-        super().__init__(schema_registry_client=schema_registry, logger=self._logger)
+        super().__init__(schema_registry_client=schema_registry, logger=logger)
 
         # Copy settings to avoid mutating caller's dict
         self._settings = consumer_config.copy()

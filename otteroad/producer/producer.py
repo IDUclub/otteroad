@@ -72,7 +72,7 @@ class KafkaProducerClient(AvroSerializerMixin):
 
         # Initialize schema registry and serialization
         schema_registry = SchemaRegistryClient(producer_settings.get_schema_registry_config())
-        super().__init__(schema_registry_client=schema_registry, logger=self._logger)
+        super().__init__(schema_registry_client=schema_registry, logger=logger)
 
         # Configure Kafka producer with queue limits
         self._settings = producer_settings

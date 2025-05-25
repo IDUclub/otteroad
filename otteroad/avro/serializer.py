@@ -120,7 +120,7 @@ class AvroSerializerMixin:
             RuntimeError: If serialization fails
         """
         try:
-            self._logger.debug("Serializing...", event=type(event).__name__)
+            self._logger.debug("Serializing...", event_model=type(event).__name__)
             return event.serialize(self.schema_registry)
         except Exception as e:
             error_msg = f"Serialization failed for {type(event).__name__}: {str(e)}"

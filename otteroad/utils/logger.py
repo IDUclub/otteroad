@@ -4,7 +4,6 @@ ensuring type-safe injection of custom logger implementations throughout
 the Kafka client library.
 """
 
-import logging
 from typing import Protocol, runtime_checkable
 
 
@@ -55,7 +54,7 @@ class LoggerAdapter:
         Detect whether the logger is a structlog logger
         (uses .bind() and structured event_dict).
         """
-        return hasattr(self._logger, "bind") and callable(getattr(self._logger, "bind", None))
+        return self._logger.__class__.__module__.startswith("structlog")
 
     def _detect_loguru(self) -> bool:
         """
@@ -85,20 +84,22 @@ class LoggerAdapter:
         elif self._is_loguru:
             # loguru uses `extra` for structured fields; handles exc_info separately
             log_method = getattr(self._logger, level)
-            if exc_info:
-                log_method(message, extra=kwargs, exception=exc_info)
-            else:
-                log_method(message, extra=kwargs)
+            log_msg = message
+            if kwargs:
+                log_msg += " (" + ", ".join([f"{k} = {i}" for k, i in kwargs.items()]) + ")"
+            log_method(log_msg)
 
         else:
             # Standard logging.Logger (or compatible): use `extra`
             log_method = getattr(self._logger, level, None)
+            log_msg = message
+            if kwargs:
+                log_msg += " (" + ", ".join([f"{k} = {i}" for k, i in kwargs.items()]) + ")"
             if log_method is not None:
-                log_method(message, extra=kwargs, exc_info=exc_info)
+                log_method(log_msg, exc_info=exc_info)
             else:
-                # Fallback to .log(levelno)
-                levelno = getattr(logging, level.upper(), logging.INFO)
-                self._logger.info(levelno, message, extra=kwargs, exc_info=exc_info)
+                # Fallback to .info()
+                self._logger.info(log_msg, exc_info=exc_info)
 
     # Public level methods
 
