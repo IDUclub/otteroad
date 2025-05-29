@@ -2,12 +2,12 @@
   "type": "record",
   "name": "SocGroupsUpdated",
   "namespace": "urban.events.soc_groups",
+  "doc": "Model for message indicates that a social group has been updated.",
   "fields": [
     {
       "name": "soc_group_id",
       "type": "long",
       "doc": "updated social group identifier"
     }
-  ],
-  "doc": "Model for message indicates that a social group has been updated."
+  ]
 }

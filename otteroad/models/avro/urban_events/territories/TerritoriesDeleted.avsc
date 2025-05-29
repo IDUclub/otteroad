@@ -2,6 +2,7 @@
   "type": "record",
   "name": "TerritoriesDeleted",
   "namespace": "urban.events.territories",
+  "doc": "Model for message indicates that a territories has been deleted.",
   "fields": [
     {
       "name": "parent_ids",
@@ -11,6 +12,5 @@
       },
       "doc": "list of region territories identifiers for which child territory has been deleted"
     }
-  ],
-  "doc": "Model for message indicates that a territories has been deleted."
+  ]
 }

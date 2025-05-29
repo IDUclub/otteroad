@@ -16,3 +16,4 @@ class ScenarioIndicatorsUpdated(AvroEventModel):
     project_id: int = Field(..., description="project identifier where scenario has been updated")
     scenario_id: int = Field(..., description="scenario identifier for which indicator value has been updated")
     indicator_id: int = Field(..., description="updated indicator identifier for which value has been updated")
+    indicator_value_id: int = Field(..., description="updated indicator value identifier")

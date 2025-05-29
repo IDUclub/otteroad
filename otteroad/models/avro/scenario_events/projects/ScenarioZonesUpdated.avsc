@@ -2,6 +2,7 @@
   "type": "record",
   "name": "ScenarioZonesUpdated",
   "namespace": "scenario.events.projects",
+  "doc": "Model for message indicates that functional zones have been updated for project scenario.",
   "fields": [
     {
       "name": "project_id",
@@ -13,6 +14,5 @@
       "type": "long",
       "doc": "scenario identifier where zones have been updated"
     }
-  ],
-  "doc": "Model for message indicates that functional zones have been updated for project scenario."
+  ]
 }

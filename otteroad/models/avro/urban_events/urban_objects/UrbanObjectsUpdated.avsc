@@ -2,6 +2,7 @@
   "type": "record",
   "name": "UrbanObjectsUpdated",
   "namespace": "urban.events.urban_objects",
+  "doc": "Model for message indicates that urban objects have been updated for territory.",
   "fields": [
     {
       "name": "territory_id",
@@ -24,6 +25,5 @@
       },
       "doc": "list of physical object types identifiers which have been updated"
     }
-  ],
-  "doc": "Model for message indicates that urban objects have been updated for territory."
+  ]
 }

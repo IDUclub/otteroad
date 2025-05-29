@@ -16,3 +16,4 @@ class RegionalScenarioIndicatorsUpdated(AvroEventModel):
     scenario_id: int = Field(..., description="regional scenario identifier for which indicator value has been updated")
     territory_id: int = Field(..., description="region territory identifier for which scenario has been created")
     indicator_id: int = Field(..., description="updated indicator identifier for which value has been updated")
+    indicator_value_id: int = Field(..., description="updated indicator value identifier")

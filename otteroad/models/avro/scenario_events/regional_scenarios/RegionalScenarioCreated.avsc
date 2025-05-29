@@ -2,6 +2,7 @@
   "type": "record",
   "name": "RegionalScenarioCreated",
   "namespace": "scenario.events.regional_scenarios",
+  "doc": "Model for message indicates that a regional scenario has been created.",
   "fields": [
     {
       "name": "scenario_id",
@@ -13,6 +14,5 @@
       "type": "long",
       "doc": "region territory identifier for which scenario has been created"
     }
-  ],
-  "doc": "Model for message indicates that a regional scenario has been created."
+  ]
 }
