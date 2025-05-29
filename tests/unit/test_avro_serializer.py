@@ -1,6 +1,7 @@
 """Unit tests for AVRO serializer class are defined here."""
 
 import json
+import logging
 import struct
 from types import SimpleNamespace
 from typing import ClassVar
@@ -107,17 +108,35 @@ class TestAvroSerializerMixin:
         assert result == MyModel
         serializer.schema_registry.get_schema.assert_not_called()
 
-    def test_get_model_class_not_found(self, serializer):
+    def test_get_model_class_not_found(self, serializer, caplog):
         """Test behavior when the model class for a schema ID is not found."""
         schema_id = 999
         fake_schema = MagicMock()
         fake_schema.schema_str = '{"type": "test"}'
         serializer.schema_registry.get_schema.return_value = fake_schema
 
-        with pytest.raises(ValueError) as exc_info:
-            serializer._get_model_class(schema_id)
+        with caplog.at_level(logging.WARNING):
+            model_class = serializer._get_model_class(schema_id)
 
-        assert f"No registered model for schema ID {schema_id}" in str(exc_info.value)
+        assert model_class is None
+        assert "No registered model" in caplog.text
+
+    def test_deserialize_returns_none_for_unregistered_schema(self, serializer):
+        """Test deserialization of an unregistered schema."""
+        schema_str = '{"type": "record", "name": "Unknown", "fields": []}'
+        schema_id = 456
+        message = MagicMock(spec=Message)
+        payload = b"\x00" + struct.pack(">I", schema_id) + b"{}"
+        message.value.return_value = payload
+        message.topic.return_value = "test_topic"
+        message.partition.return_value = 0
+        message.offset.return_value = 123
+
+        serializer.schema_registry.get_schema.return_value = SimpleNamespace(schema_str=schema_str)
+
+        result = serializer.deserialize_message(message)
+
+        assert result is None
 
     def test_get_schema_str_caching(self, serializer):
         """Test caching for schema string retrieval based on schema ID."""
@@ -133,6 +152,18 @@ class TestAvroSerializerMixin:
 
         assert result1 == result2 == '{"type": "test"}'
         serializer.schema_registry.get_schema.assert_called_once_with(schema_id)
+
+    def test_get_schema_str_failure_logs_error(self, serializer, caplog):
+        """Test behavior when schema string retrieval fails."""
+        schema_id = 999
+        serializer.schema_registry.get_schema.side_effect = RuntimeError("Registry error")
+
+        with caplog.at_level(logging.ERROR):
+            with pytest.raises(RuntimeError, match="Registry error"):
+                serializer._get_schema_str(schema_id)
+
+        assert "Schema fetch failed" in caplog.text
+        assert str(schema_id) in caplog.text
 
     def test_error_logging_on_deserialization_failure(self, serializer, caplog):
         """Test that errors during deserialization are logged correctly."""
@@ -190,4 +221,15 @@ class TestAvroSerializerMixin:
         serializer.schema_registry.get_schema.return_value = Schema(schema_id, "AVRO", schema_str)
 
         with pytest.raises(RuntimeError):
+            serializer.deserialize_message(message)
+
+    def test_deserialize_message_none_value(self, serializer):
+        """Test deserialization with None value."""
+        message = MagicMock(spec=Message)
+        message.value.return_value = None
+        message.topic.return_value = "test_topic"
+        message.partition.return_value = 0
+        message.offset.return_value = 123
+
+        with pytest.raises(RuntimeError, match="Invalid message: missing or incomplete value"):
             serializer.deserialize_message(message)

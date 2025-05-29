@@ -4,15 +4,15 @@ import json
 import struct
 from datetime import date, datetime, timezone
 from enum import Enum
-from typing import ClassVar
+from typing import ClassVar, Union
 from unittest.mock import MagicMock, patch
 from uuid import UUID, uuid4
 
 import fastavro
 import pytest
-from confluent_kafka.schema_registry import SchemaRegistryClient
+from confluent_kafka.schema_registry import SchemaRegistryClient, SchemaRegistryError
 from confluent_kafka.schema_registry.schema_registry_client import Schema
-from pydantic import ValidationError
+from pydantic import Field, ValidationError
 
 from otteroad.avro import AvroEventModel
 
@@ -32,7 +32,7 @@ class UserEvent(AvroEventModel):
     user_id: UUID
     action: str
     timestamp: datetime
-    optional_field: int | None = None
+    optional_field: int | None = Field(None, description="optional field")
 
 
 class NestedModel(AvroEventModel):
@@ -40,7 +40,8 @@ class NestedModel(AvroEventModel):
 
     topic: ClassVar[str] = "nested.events"
     namespace: ClassVar[str] = "nested_event"
-    value: str
+    value: Union[int, str, None]
+    optional_field: int | None
 
 
 class EnumModel(AvroEventModel):
@@ -178,6 +179,12 @@ class TestAvroEventModel:
         assert UserEvent.is_compatible_with(mock_registry) is True
         mock_registry.test_compatibility.assert_called_once()
 
+        mock_registry.set_compatibility.side_effect = SchemaRegistryError(
+            http_status_code=500, error_code=101, error_message="error"
+        )
+
+        assert UserEvent.is_compatible_with(mock_registry) is False
+
     def test_deserialize_invalid_data(self, mock_registry):
         """Handle deserialization with invalid data."""
         invalid_data = b"invalid"
@@ -207,7 +214,7 @@ class TestAvroEventModel:
 
     def test_nested_model_serialization(self):
         """Nested model serialization."""
-        nested = NestedModel(value="test")
+        nested = NestedModel(value="test", optional_field=1)
         event = ComplexModel(nested=nested, ids=[uuid4()], metadata={"key": 42})
 
         avro_dict = event.to_avro_dict()
@@ -247,3 +254,11 @@ class TestAvroEventModel:
         schema = DefaultModel.avro_schema()
         field_schema = next(f for f in schema["fields"] if f["name"] == "field")
         assert field_schema["default"] == "default_value"
+
+    def test_model_representation(self):
+        """Model representation."""
+
+        event = UserEvent(user_id=uuid4(), action="login", timestamp=datetime.now(timezone.utc))
+
+        assert str(event) == UserEvent.schema_subject()
+        assert f"<{UserEvent.__name__}" in repr(event)

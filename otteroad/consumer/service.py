@@ -111,7 +111,7 @@ class KafkaConsumerService:
             handler: Message handler instance to register
         """
         self._handler_registry.register(handler)
-        self._logger.info("Registered handler for event", event_type=handler.event_type.__name__)
+        self._logger.info("Registered handler for event", event_model=handler.event_type.__name__)
 
     def unregister_handler(self, event_type: type[AvroEventModel] | str) -> None:
         """

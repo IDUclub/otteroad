@@ -16,7 +16,7 @@ from confluent_kafka import Message
 from pydantic import BaseModel
 
 from otteroad.avro.model import AvroEventModel
-from otteroad.utils import LoggerProtocol
+from otteroad.utils import LoggerAdapter, LoggerProtocol
 
 # Generic type for supported event models (Pydantic BaseModel or AvroEventModel)
 EventT = TypeVar("EventT", bound=[BaseModel, AvroEventModel])
@@ -36,9 +36,6 @@ class BaseMessageHandler(ABC, Generic[EventT]):
     1. Subclasses must implement abstract methods
     2. Event type must be specified via event_type property
     3. Handler methods should be thread-safe
-
-    Attributes:
-        logger (LoggerProtocol): Configured logger instance
     """
 
     _event_type: type | None = None
@@ -51,7 +48,7 @@ class BaseMessageHandler(ABC, Generic[EventT]):
             logger: Custom logger implementing LoggerProtocol.
                     Uses default logger if not provided.
         """
-        self.logger = logger or logging.getLogger(__name__)
+        self._logger = LoggerAdapter(logger or logging.getLogger(__name__))
 
     def __init_subclass__(cls, **kwargs):
         """
@@ -145,12 +142,12 @@ class BaseMessageHandler(ABC, Generic[EventT]):
         Returns:
             tuple[EventT, Message]: Modified event and context
         """
-        self.logger.debug(
-            "Pre-processing message (%s) from %s[%d]@%d",
-            str(event),
-            ctx.topic(),
-            ctx.partition(),
-            ctx.offset(),
+        self._logger.debug(
+            "Pre-processing message",
+            event_model=str(event),
+            topic=ctx.topic(),
+            partition=ctx.partition(),
+            offset=ctx.offset(),
         )
 
         return event, ctx
@@ -163,7 +160,7 @@ class BaseMessageHandler(ABC, Generic[EventT]):
         - Audit logging
         - Transaction finalization
         """
-        self.logger.debug("Post-processing completed successfully")
+        self._logger.debug("Post-processing completed successfully")
 
     async def handle_error(  # pylint: disable=missing-param-doc
         self, error: Exception, event: EventT, ctx: Message, *args, **kwargs  # pylint: disable=unused-argument
@@ -176,13 +173,13 @@ class BaseMessageHandler(ABC, Generic[EventT]):
             event: Event instance that failed processing
             ctx: Associated Kafka message context
         """
-        self.logger.error(
-            "Error processing message (%s) from %s[%d]@%d: %s",
-            str(event),
-            ctx.topic(),
-            ctx.partition(),
-            ctx.offset(),
-            str(error),
+        self._logger.error(
+            "Error processing message",
+            event_model=str(event),
+            topic=ctx.topic(),
+            partition=ctx.partition(),
+            offset=ctx.offset(),
+            error=str(error),
             exc_info=True,
         )
         raise error
@@ -202,12 +199,12 @@ class BaseMessageHandler(ABC, Generic[EventT]):
         try:
             processed_event, processed_ctx = await self.pre_process(event, ctx)
 
-            self.logger.info(
-                "Processing message from %s[%d]@%d",
-                processed_ctx.topic(),
-                processed_ctx.partition(),
-                processed_ctx.offset(),
-                extra={"event": str(processed_event)},
+            self._logger.info(
+                "Processing message",
+                event_model=str(processed_event),
+                topic=processed_ctx.topic(),
+                partition=processed_ctx.partition(),
+                offset=processed_ctx.offset(),
             )
 
             await self.handle(processed_event, processed_ctx)

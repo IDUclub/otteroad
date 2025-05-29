@@ -8,19 +8,10 @@ from confluent_kafka import Message
 from pydantic import BaseModel
 
 from otteroad.consumer.handlers import BaseMessageHandler
-from otteroad.utils import LoggerProtocol
+from otteroad.utils import LoggerAdapter, LoggerProtocol
 
 
 class TestBaseMessageHandler:
-    @pytest.fixture
-    def mock_logger(self):
-        """Fixture for mocking the logger used in the handler."""
-        logger = MagicMock(spec=LoggerProtocol)
-        logger.debug = MagicMock()
-        logger.info = MagicMock()
-        logger.error = MagicMock()
-        return logger
-
     @pytest.fixture
     def test_event_model(self):
         """Fixture for creating a test event model using Pydantic."""
@@ -48,9 +39,9 @@ class TestBaseMessageHandler:
         return ConcreteHandler
 
     @pytest.fixture
-    def handler(self, concrete_handler_cls, mock_logger):
+    def handler(self, concrete_handler_cls):
         """Fixture for creating an instance of the concrete handler with the mocked logger."""
-        return concrete_handler_cls(logger=mock_logger)
+        return concrete_handler_cls()
 
     @pytest.fixture
     def mock_message(self):
@@ -136,26 +127,23 @@ class TestBaseMessageHandler:
 
         handler.handle_error.assert_awaited_once_with(test_error, event, mock_message)
 
-    def test_pre_process_logging(self, handler, mock_message, mock_logger):
+    @pytest.mark.asyncio
+    async def test_pre_process_logging(self, handler, mock_message):
         """Test that logging occurs correctly during the `pre_process` method."""
         event = handler.event_type(id=1, name="test")
 
-        async def run():
-            return await handler.pre_process(event, mock_message)
-
-        import asyncio
-
-        asyncio.run(run())
-
-        mock_logger.debug.assert_called_once_with(
-            "Pre-processing message (%s) from %s[%d]@%d", str(event), "test_topic", 0, 100
-        )
+        with patch.object(handler._logger, "debug") as mock_debug:
+            await handler.pre_process(event, mock_message)
+            mock_debug.assert_called_once_with(
+                "Pre-processing message", event_model=str(event), topic="test_topic", partition=0, offset=100
+            )
 
     @pytest.mark.asyncio
-    async def test_post_process_logging(self, handler, mock_logger):
+    async def test_post_process_logging(self, handler):
         """Test that logging occurs correctly during the `post_process` method."""
-        await handler.post_process()
-        mock_logger.debug.assert_called_once_with("Post-processing completed successfully")
+        with patch.object(handler._logger, "debug") as mock_debug:
+            await handler.post_process()
+            mock_debug.assert_called_once_with("Post-processing completed successfully")
 
     @pytest.mark.asyncio
     async def test_handle_error_behavior(self, handler, mock_message, test_event_model):
@@ -165,17 +153,17 @@ class TestBaseMessageHandler:
         test_error = RuntimeError("Critical error")
         event = test_event_model(id=1, name="test")
 
-        with patch.object(handler.logger, "error") as mock_error:
+        with patch.object(handler._logger, "error") as mock_error:
             with pytest.raises(type(test_error)):
                 await handler.handle_error(test_error, event, mock_message)
 
             mock_error.assert_called_once_with(
-                "Error processing message (%s) from %s[%d]@%d: %s",
-                str(event),
-                "test_topic",
-                0,
-                100,
-                str(test_error),
+                "Error processing message",
+                event_model=str(event),
+                topic="test_topic",
+                partition=0,
+                offset=100,
+                error=str(test_error),
                 exc_info=True,
             )
 
@@ -191,13 +179,14 @@ class TestBaseMessageHandler:
 
         assert "Can't instantiate abstract class" in str(exc_info.value)
 
-    def test_logger_injection(self, concrete_handler_cls, mock_logger):
+    def test_logger_injection(self, concrete_handler_cls):
         """Test that the logger is correctly injected into the handler class."""
+        mock_logger = MagicMock()
         handler = concrete_handler_cls(logger=mock_logger)
-        assert handler.logger == mock_logger
+        assert handler._logger._logger == mock_logger
 
     def test_default_logger(self, concrete_handler_cls):
         """Test that the default logger is used when no logger is provided."""
         handler = concrete_handler_cls()
-        assert isinstance(handler.logger, logging.Logger)
-        assert handler.logger.name.endswith("handlers.base")
+        assert isinstance(handler._logger._logger, logging.Logger)
+        assert handler._logger._logger.name.endswith("handlers.base")

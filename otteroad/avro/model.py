@@ -113,15 +113,10 @@ class AvroEventModel(BaseModel):
 
             fields.append(field_schema)
 
-        result = {
-            "type": "record",
-            "name": cls.__name__,
-            "namespace": f"{cls.topic}.{cls.namespace}",
-            "fields": fields,
-        }
-
+        result = {"type": "record", "name": cls.__name__, "namespace": f"{cls.topic}.{cls.namespace}"}
         if cls.__doc__ is not None:
             result["doc"] = cls.__doc__
+        result["fields"] = fields
 
         return result
 

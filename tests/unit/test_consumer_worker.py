@@ -1,11 +1,14 @@
 """Unit tests for Kafka consumer worker are defined here."""
 
 import asyncio
+import threading
+import time
+from contextlib import suppress
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 import pytest_asyncio
-from confluent_kafka import Consumer, Message
+from confluent_kafka import Consumer, KafkaError, KafkaException, Message
 from confluent_kafka.schema_registry import SchemaRegistryClient
 
 from otteroad.consumer import EventHandlerRegistry, KafkaConsumerWorker
@@ -74,6 +77,17 @@ class TestKafkaConsumerWorker:
         assert consumer_worker._loop is not None
         assert consumer_worker._poll_thread is None
 
+    def test_init_without_event_loop(self, monkeypatch, mock_schema_registry, mock_handler_registry):
+        """Test initializing consumer with invalid loop."""
+        monkeypatch.setattr(asyncio, "get_running_loop", Mock(side_effect=RuntimeError("no loop")))
+        with pytest.raises(RuntimeError, match="No event loop provided and not running in async context"):
+            KafkaConsumerWorker(
+                consumer_config={"bootstrap.servers": "localhost:9092", "group.id": "dummy"},
+                schema_registry=mock_schema_registry,
+                handler_registry=mock_handler_registry,
+                topics=["test-topic"],
+            )
+
     @pytest.mark.asyncio
     async def test_start_stop(self, consumer_worker, mock_kafka_consumer):
         """Test starting and stopping the KafkaConsumerWorker."""
@@ -111,6 +125,42 @@ class TestKafkaConsumerWorker:
             consumer_worker._process_loop = original_process_loop
             await consumer_worker.stop()
 
+    def test_poll_loop_handles_errors(self, consumer_worker, mock_kafka_consumer, caplog):
+        """Test handling errors in poll loop."""
+        error_msg = MagicMock()
+        error_msg.error.return_value = True
+        mock_kafka_consumer.poll.side_effect = [error_msg, Exception("Poll exception")]
+
+        consumer_worker._cancelled.clear()
+        consumer_worker._poll_loop()
+
+        assert "Consumer error" in caplog.text
+        assert "Critical error in poll loop" in caplog.text
+
+    def test_process_commits_handles_errors(self, consumer_worker, mock_kafka_consumer, caplog):
+        """Test handling errors in process commits."""
+        msg = MagicMock()
+        consumer_worker._commit_queue.put(msg)
+        mock_kafka_consumer.commit.side_effect = Exception("Commit exception")
+
+        consumer_worker._process_commits()
+
+        assert "Commit error" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_process_loop_handles_errors(self, consumer_worker, valid_message, caplog):
+        """Test handling errors in process loop."""
+        consumer_worker._queue.put_nowait(valid_message)
+        consumer_worker._handle_message = AsyncMock(side_effect=Exception("Processing error"))
+
+        task = asyncio.create_task(consumer_worker._process_loop())
+        await asyncio.sleep(0.1)
+        task.cancel()
+        with suppress(asyncio.CancelledError):
+            await task
+
+        assert "Processing error" in caplog.text
+
     @pytest.mark.asyncio
     async def test_handle_message_success(self, consumer_worker, mock_handler_registry, valid_message):
         """Test handling a valid message successfully."""
@@ -140,6 +190,38 @@ class TestKafkaConsumerWorker:
         assert "Failed to process message" in caplog.text
         assert not consumer_worker._commit_queue.empty()
 
+    @pytest.mark.asyncio
+    async def test_handle_message_skips_none_event(self, consumer_worker, valid_message):
+        """Test handling a message with skips none event."""
+        consumer_worker.deserialize_message = MagicMock(return_value=None)
+        consumer_worker._handler_registry.get_handler = MagicMock()
+        consumer_worker._settings["enable.auto.commit"] = False
+
+        await consumer_worker._handle_message(valid_message)
+
+        consumer_worker._handler_registry.get_handler.assert_not_called()
+
+        assert not consumer_worker._commit_queue.empty()
+        assert consumer_worker._commit_queue.get_nowait() == valid_message
+
+    def test_shutdown_consumer_handles_errors(self, consumer_worker, mock_kafka_consumer, caplog):
+        """Test handling error while consumer shutdown."""
+        mock_kafka_consumer.close.side_effect = Exception("Close exception")
+
+        consumer_worker._shutdown_consumer()
+
+        assert "Error closing consumer" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_stop_warns_if_poll_thread_alive(self, consumer_worker, mock_kafka_consumer, caplog):
+        """Test non-gracefully stopping."""
+        consumer_worker._poll_thread = threading.Thread(target=lambda: time.sleep(2))
+        consumer_worker._poll_thread.start()
+
+        await consumer_worker.stop(timeout=0.1)
+
+        assert "Poll thread did not exit gracefully" in caplog.text
+
     def test_on_assign_with_invalid_partitions(self, consumer_worker, mock_kafka_consumer):
         """Test that invalid partitions are not assigned."""
         # Arrange: mock the partition validation and invalid partitions
@@ -151,6 +233,38 @@ class TestKafkaConsumerWorker:
 
         # Assert: check that no partitions are assigned
         mock_kafka_consumer.assign.assert_called_once_with([])
+
+    def test_on_assign_sync_handles_kafka_errors(self, consumer_worker, mock_kafka_consumer, caplog):
+        """Test handling errors on assign."""
+        for error_code, log_message in [
+            (KafkaError._ALL_BROKERS_DOWN, "All brokers unavailable"),
+            (KafkaError._UNKNOWN_TOPIC, "Topic does not exist"),
+            (KafkaError._UNKNOWN_PARTITION, "Invalid partitions"),
+            (KafkaError._FATAL, "Kafka error during assignment"),
+        ]:
+            kafka_error = KafkaError(error_code)
+            kafka_exception = KafkaException(kafka_error)
+            mock_kafka_consumer.assign.side_effect = kafka_exception
+
+            consumer_worker._on_assign_sync(mock_kafka_consumer, [MagicMock()])
+
+            assert log_message in caplog.text
+            mock_kafka_consumer.assign.side_effect = None
+
+    def test_on_revoke_sync_handles_errors(self, consumer_worker, mock_kafka_consumer, caplog):
+        """Test handling errors on revoke."""
+        kafka_error = KafkaError(KafkaError._NO_OFFSET)
+        kafka_exception = KafkaException(kafka_error)
+        mock_kafka_consumer.commit.side_effect = kafka_exception
+
+        consumer_worker._on_revoke_sync(mock_kafka_consumer, [MagicMock()])
+
+        assert "No offsets to commit for partitions" in caplog.text
+
+        mock_kafka_consumer.commit.side_effect = Exception("Commit exception")
+        consumer_worker._on_revoke_sync(mock_kafka_consumer, [MagicMock()])
+
+        assert "Unexpected error during revoke" in caplog.text
 
     def test_on_assign_revoke_callbacks(self, consumer_worker, mock_kafka_consumer):
         """Test that assign and revoke callbacks are correctly handled."""

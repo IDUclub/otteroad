@@ -92,7 +92,6 @@ class AvroSerializerMixin:
         """
         if schema_id not in self._schema_cache:
             schema_str = self._get_schema_str(schema_id)
-
             # Search through all registered subclasses
             for model in AvroEventModel.__subclasses__():
                 if json.dumps(model.avro_schema(), separators=(",", ":")) == schema_str:
@@ -100,9 +99,8 @@ class AvroSerializerMixin:
                     self._logger.debug("Cached model", model=model.__name__, schema_id=schema_id)
                     break
             else:
-                error_msg = f"No registered model for schema ID {schema_id}"
-                self._logger.error(error_msg)
-                raise ValueError(error_msg)
+                self._logger.warning("No registered model for given schema", schema_id=schema_id)
+                return None
 
         return self._schema_cache[schema_id]
 
@@ -127,7 +125,7 @@ class AvroSerializerMixin:
             self._logger.error(error_msg)
             raise RuntimeError(error_msg) from e
 
-    def deserialize_message(self, message: Message) -> EventModel:
+    def deserialize_message(self, message: Message) -> AvroEventModel | None:
         """
         Deserialize Kafka message to AvroEventModel instance.
 
@@ -135,13 +133,13 @@ class AvroSerializerMixin:
             message: Raw Kafka message
 
         Returns:
-            AvroEventModel: Deserialized event instance
+            AvroEventModel | None: Deserialized event instance or None if message was not registered
 
         Raises:
             RuntimeError: If deserialization fails
             ValueError: For invalid message format
         """
-        try:
+        try:  # pylint: disable=too-many-try-statements
             self._logger.debug("Deserializing message", topic=message.topic())
             value = message.value()
 
@@ -155,6 +153,8 @@ class AvroSerializerMixin:
 
             self._logger.debug("Deserializing schema", schema_id=schema_id)
             model_class = self._get_model_class(schema_id)
+            if model_class is None:
+                return None
             return model_class.deserialize(value, self.schema_registry)
 
         except Exception as e:

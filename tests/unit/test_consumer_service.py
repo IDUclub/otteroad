@@ -140,7 +140,7 @@ class TestKafkaConsumerService:
 
         # Assert that the handler is successfully registered
         assert service._handler_registry.handlers
-        service._logger.info.assert_called_with("Registered handler for event", event_type="TestEvent")
+        service._logger.info.assert_called_with("Registered handler for event", event_model="TestEvent")
 
     def test_unregister_handler_by_type(self, service):
         """Test unregistering a handler by event type."""

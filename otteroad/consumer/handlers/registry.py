@@ -74,7 +74,7 @@ class EventHandlerRegistry:
             BaseMessageHandler: The registered handler instance.
 
         Raises:
-            typeError: If the provided argument is not an AvroEventModel instance or subclass.
+            TypeError: If the provided argument is not an AvroEventModel instance or subclass.
             KeyError: If no handler is registered for the event type.
         """
         event_type = event if isinstance(event, type) else type(event)

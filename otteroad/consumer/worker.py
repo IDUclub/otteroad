@@ -243,11 +243,13 @@ class KafkaConsumerWorker(AvroSerializerMixin):
         try:
             # Deserialize payload to event object
             event = self.deserialize_message(msg)
+            if event is None:
+                return
 
             # Lookup handler based on event type or content
             handler = self._handler_registry.get_handler(event)
             if handler is None:
-                self._logger.info("Handler not found for event", event=event)
+                self._logger.info("Handler not found for event", event_model=event)
                 return
 
             # Execute handler, using thread if synchronous
@@ -309,7 +311,7 @@ class KafkaConsumerWorker(AvroSerializerMixin):
             kafka_error = e.args[0]
             error_code = kafka_error.code()
 
-            # Обработка специфических ошибок Kafka
+            # Kafka specific error handling
             if error_code == KafkaError._ALL_BROKERS_DOWN:
                 self._logger.critical("All brokers unavailable", error=kafka_error.str())
             elif error_code == KafkaError._UNKNOWN_TOPIC:
@@ -325,9 +327,9 @@ class KafkaConsumerWorker(AvroSerializerMixin):
             self._logger.error("Unexpected assignment error", error=e, exc_info=True)
 
         finally:
-            # Защита состояния потребителя
+            # Consumer state protection
             try:
-                if not consumer.assignment():  # Если назначение не удалось
+                if not consumer.assignment():  # If the assignment failed
                     self._logger.warning("Consumer has no assigned partitions after assignment attempt")
                     consumer.unassign()
             except Exception as e:  # pylint: disable=broad-exception-caught

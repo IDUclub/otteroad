@@ -68,10 +68,10 @@ class TestIntegrationBaseMessageHandler:
             dlq_producer = Producer({"bootstrap.servers": "localhost:9092"})
 
             async def on_startup(self):
-                self.logger.info("Handler startup completed")
+                self._logger.info("Handler startup completed")
 
             async def on_shutdown(self):
-                self.logger.info("Handler shutdown completed")
+                self._logger.info("Handler shutdown completed")
 
             async def handle(self, event: test_event_model, ctx: Message):
                 """Handle the incoming event"""
