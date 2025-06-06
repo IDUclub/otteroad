@@ -353,7 +353,7 @@ class AvroEventModel(BaseModel):
             return cls.model_validate(record)
 
         except (SchemaRegistryError, json.JSONDecodeError, fastavro.read.SchemaResolutionError) as e:
-            raise ValueError(f"Deserialization failed: {str(e)}") from e
+            raise ValueError(f"Deserialization failed: {repr(e)}") from e
 
     @classmethod
     def schema_subject(cls) -> str:

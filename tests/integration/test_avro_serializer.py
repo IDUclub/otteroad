@@ -122,14 +122,14 @@ class TestIntegrationAvroSerializerMixin:
         assert "electronics" in deserialized.tags
 
     @pytest.mark.filterwarnings("ignore::UserWarning:pydantic.*")
-    def test_error_handling_scenarios(self, serializer, user_model_cls):
+    def test_error_handling_scenarios(self, serializer, user_model_cls, caplog):
         """Test error handling scenarios for serialization and deserialization."""
         # Test for corrupted data
         message = MagicMock(spec=Message)
         message.value.return_value = b"invalid_data"
 
-        with pytest.raises(RuntimeError, match="Deserialization failed"):
-            serializer.deserialize_message(message)
+        serializer.deserialize_message(message)
+        assert "Invalid magic byte" in caplog.text
 
         # Test schema mismatch error
         class InvalidModel(user_model_cls):
@@ -159,7 +159,7 @@ class TestIntegrationAvroSerializerMixin:
 
         # Second schema request (should hit cache)
         prev_call_count = schema_registry.get_schema.call_count
-        model_class = serializer._get_model_class(schema_id)
+        serializer._get_model_class(schema_id)
         assert schema_registry.get_schema.call_count == prev_call_count
 
     def test_logging_on_failure(self, serializer, caplog):
@@ -171,9 +171,8 @@ class TestIntegrationAvroSerializerMixin:
         message.partition.return_value = 1
         message.offset.return_value = 100
 
-        with pytest.raises(RuntimeError):
-            serializer.deserialize_message(message)
+        serializer.deserialize_message(message)
 
         # Check if error is logged correctly
-        assert "Deserialization error" in caplog.text
-        assert "ERROR" in caplog.text
+        assert "Invalid magic byte" in caplog.text
+        assert "WARNING" in caplog.text

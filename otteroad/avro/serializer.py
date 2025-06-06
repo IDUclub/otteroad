@@ -42,7 +42,7 @@ class AvroSerializerMixin:
         self,
         schema_registry_client: SchemaRegistryClient,
         *args,
-        logger: LoggerProtocol | None = None,
+        logger: LoggerProtocol | LoggerAdapter | None = None,
         **kwargs,
     ):
         """
@@ -54,6 +54,8 @@ class AvroSerializerMixin:
         """
         super().__init__(*args, **kwargs)
         self._logger = LoggerAdapter(logger or logging.getLogger(__name__))
+        if isinstance(logger, LoggerAdapter):
+            self._logger = logger
         self.schema_registry = schema_registry_client
         self._schema_cache: dict[int, type[AvroEventModel]] = {}
 
@@ -74,7 +76,7 @@ class AvroSerializerMixin:
         try:
             return self.schema_registry.get_schema(schema_id).schema_str
         except Exception as e:
-            self._logger.error("Schema fetch failed", schema_id=schema_id, error=str(e), exc_info=True)
+            self._logger.error("Schema fetch failed", schema_id=schema_id, error=repr(e), exc_info=True)
             raise
 
     def _get_model_class(self, schema_id: int) -> type[EventModel]:
@@ -121,7 +123,7 @@ class AvroSerializerMixin:
             self._logger.debug("Serializing...", event_model=type(event).__name__)
             return event.serialize(self.schema_registry)
         except Exception as e:
-            error_msg = f"Serialization failed for {type(event).__name__}: {str(e)}"
+            error_msg = f"Serialization failed for {type(event).__name__}: {repr(e)}"
             self._logger.error(error_msg)
             raise RuntimeError(error_msg) from e
 
@@ -144,12 +146,14 @@ class AvroSerializerMixin:
             value = message.value()
 
             if not value or len(value) < 5:
-                raise ValueError("Invalid message: missing or incomplete value")
+                self._logger.warning("Invalid message: missing or incomplete value")
+                return None
 
             # Extract Confluent header (magic byte + schema ID)
             magic, schema_id = struct.unpack(">bI", value[:5])
             if magic != 0:
-                raise ValueError(f"Invalid magic byte: {magic}")
+                self._logger.warning(f"Invalid magic byte: {magic}")
+                return None
 
             self._logger.debug("Deserializing schema", schema_id=schema_id)
             model_class = self._get_model_class(schema_id)
@@ -158,13 +162,13 @@ class AvroSerializerMixin:
             return model_class.deserialize(value, self.schema_registry)
 
         except Exception as e:
-            error_msg = f"Deserialization failed: {str(e)}"
+            error_msg = f"Deserialization failed: {repr(e)}"
             self._logger.error(
                 "Deserialization error",
                 topic=message.topic(),
                 partition=message.partition(),
                 offset=message.offset(),
-                error=error_msg,
+                error=repr(e),
                 exc_info=True,
             )
             raise RuntimeError(error_msg) from e
