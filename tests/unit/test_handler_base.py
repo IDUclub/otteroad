@@ -135,7 +135,11 @@ class TestBaseMessageHandler:
         with patch.object(handler._logger, "debug") as mock_debug:
             await handler.pre_process(event, mock_message)
             mock_debug.assert_called_once_with(
-                "Pre-processing message", event_model=str(event), topic="test_topic", partition=0, offset=100
+                "Pre-processing message",
+                event_model=type(event).__name__,
+                topic="test_topic",
+                partition=0,
+                offset=100,
             )
 
     @pytest.mark.asyncio
@@ -159,11 +163,11 @@ class TestBaseMessageHandler:
 
             mock_error.assert_called_once_with(
                 "Error processing message",
-                event_model=str(event),
+                event_model=type(event).__name__,
                 topic="test_topic",
                 partition=0,
                 offset=100,
-                error=str(test_error),
+                error=repr(test_error),
                 exc_info=True,
             )
 

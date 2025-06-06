@@ -189,7 +189,7 @@ class KafkaProducerClient(AvroSerializerMixin):
             )
 
             await asyncio.wait_for(future, timeout)
-            self._logger.info("Message successfully sent", topic=target_topic)
+            self._logger.info("Message successfully sent", topic=target_topic, event_model=type(event).__name__)
 
         except asyncio.TimeoutError as e:
             self._logger.error("Message delivery timeout", topic=target_topic)

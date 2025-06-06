@@ -113,9 +113,17 @@ class TestKafkaProducerClient:
             await producer_client.send(mock_event)
 
             producer_client._producer.produce.assert_called_once_with(
-                topic="test.topic", value=b"serialized", key=None, headers=None, on_delivery=ANY
+                topic="test.topic",
+                value=b"serialized",
+                key=None,
+                headers=None,
+                on_delivery=ANY,
             )
-            producer_client._logger.info.assert_called_with("Message successfully sent", topic="test.topic")
+            producer_client._logger.info.assert_called_with(
+                "Message successfully sent",
+                topic="test.topic",
+                event_model=type(mock_event).__name__,
+            )
 
     @pytest.mark.asyncio
     async def test_send_message_timeout(self, producer_client, mock_event):

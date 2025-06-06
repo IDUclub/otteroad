@@ -150,6 +150,13 @@ class KafkaConsumerWorker(AvroSerializerMixin):
                     self._logger.error("Consumer error", error=msg.error(), exc_info=True)
                     continue
 
+                self._logger.info(
+                    "Received message",
+                    topic=msg.topic(),
+                    partition=msg.partition(),
+                    offset=msg.offset(),
+                )
+
                 # Safely enqueue the message for asynchronous processing
                 self._loop.call_soon_threadsafe(self._queue.put_nowait, msg)
         except Exception as e:  # pylint: disable=broad-except
@@ -164,7 +171,7 @@ class KafkaConsumerWorker(AvroSerializerMixin):
             try:
                 msg = self._commit_queue.get_nowait()
                 self._consumer.commit(msg, asynchronous=False)
-                self._logger.debug("Committed offset", offset=msg.offset())
+                self._logger.info("Committed offset", offset=msg.offset())
             except queue.Empty:
                 break
             except Exception as e:  # pylint: disable=broad-except
@@ -262,6 +269,14 @@ class KafkaConsumerWorker(AvroSerializerMixin):
 
             should_commit = True
 
+            self._logger.info(
+                "Message successfully processed",
+                event_model=type(event).__name__,
+                topic=msg.topic(),
+                partition=msg.partition(),
+                offset=msg.offset(),
+            )
+
         except Exception as e:  # pylint: disable=broad-except
             self._logger.error(
                 "Failed to process message",
@@ -317,7 +332,7 @@ class KafkaConsumerWorker(AvroSerializerMixin):
 
             # Kafka specific error handling
             if error_code == KafkaError._ALL_BROKERS_DOWN:
-                self._logger.critical("All brokers unavailable", error=kafka_error.str())
+                self._logger.error("All brokers unavailable", error=kafka_error.str())
             elif error_code == KafkaError._UNKNOWN_TOPIC:
                 self._logger.error("Topic does not exist", topics=[p.topic for p in partitions])
             elif error_code == KafkaError._UNKNOWN_PARTITION:

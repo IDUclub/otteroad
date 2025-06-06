@@ -144,7 +144,7 @@ class BaseMessageHandler(ABC, Generic[EventT]):
         """
         self._logger.debug(
             "Pre-processing message",
-            event_model=str(event),
+            event_model=type(event).__name__,
             topic=ctx.topic(),
             partition=ctx.partition(),
             offset=ctx.offset(),
@@ -175,11 +175,11 @@ class BaseMessageHandler(ABC, Generic[EventT]):
         """
         self._logger.error(
             "Error processing message",
-            event_model=str(event),
+            event_model=type(event).__name__,
             topic=ctx.topic(),
             partition=ctx.partition(),
             offset=ctx.offset(),
-            error=str(error),
+            error=repr(error),
             exc_info=True,
         )
         raise error
@@ -199,9 +199,9 @@ class BaseMessageHandler(ABC, Generic[EventT]):
         try:
             processed_event, processed_ctx = await self.pre_process(event, ctx)
 
-            self._logger.info(
+            self._logger.debug(
                 "Processing message",
-                event_model=str(processed_event),
+                event_model=type(processed_event).__name__,
                 topic=processed_ctx.topic(),
                 partition=processed_ctx.partition(),
                 offset=processed_ctx.offset(),
