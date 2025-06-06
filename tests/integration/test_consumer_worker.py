@@ -179,8 +179,7 @@ class TestIntegrationKafkaConsumerWorker:
         await asyncio.sleep(5)
 
         # Check logs for error messages
-        assert "Failed to process message" in caplog.text
-        assert "Deserialization error" in caplog.text
+        assert "Invalid magic byte" in caplog.text
 
     @pytest.mark.asyncio
     async def test_rebalance_handling(self, test_topic, consumer_worker, caplog):

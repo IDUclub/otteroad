@@ -188,7 +188,7 @@ class TestKafkaConsumerWorker:
 
         # Assert: check that the error is logged and the commit queue is not empty
         assert "Failed to process message" in caplog.text
-        assert not consumer_worker._commit_queue.empty()
+        assert consumer_worker._commit_queue.empty()
 
     @pytest.mark.asyncio
     async def test_handle_message_skips_none_event(self, consumer_worker, valid_message):
@@ -266,6 +266,25 @@ class TestKafkaConsumerWorker:
 
         assert "Unexpected error during revoke" in caplog.text
 
+    def test_on_revoke_sync_logs_commit_error(self, mock_kafka_consumer, consumer_worker, caplog):
+        partitions = [MagicMock()]
+        kafka_error = MagicMock()
+        kafka_error.code.return_value = KafkaError.UNKNOWN  # не _NO_OFFSET
+
+        mock_kafka_consumer.commit.side_effect = KafkaException(kafka_error)
+
+        consumer_worker._on_revoke_sync(mock_kafka_consumer, partitions)
+
+        assert "Commit error on revoke" in caplog.text
+
+    def test_on_revoke_sync_logs_error_if_unassign_fails(self, mock_kafka_consumer, consumer_worker, caplog):
+        partitions = [MagicMock()]
+        mock_kafka_consumer.unassign.side_effect = Exception("unassign failed")
+
+        consumer_worker._on_revoke_sync(mock_kafka_consumer, partitions)
+
+        assert "Error unassigning partitions" in caplog.text
+
     def test_on_assign_revoke_callbacks(self, consumer_worker, mock_kafka_consumer):
         """Test that assign and revoke callbacks are correctly handled."""
         test_partitions = [MagicMock()]
@@ -280,6 +299,31 @@ class TestKafkaConsumerWorker:
         consumer_worker._on_revoke_sync(mock_kafka_consumer, test_partitions)
         mock_kafka_consumer.commit.assert_called_once_with(offsets=test_partitions, asynchronous=False)
         mock_kafka_consumer.unassign.assert_called_once()
+
+    def test_on_assign_sync_warns_and_unassigns_if_no_assignment_after_assign(
+        self, mock_kafka_consumer, consumer_worker, caplog
+    ):
+        partitions = [MagicMock()]
+        valid_partitions = partitions
+
+        mock_kafka_consumer.assignment.return_value = []  # симулируем, что assign ничего не назначил
+
+        consumer_worker._validate_partition = lambda p: True
+        consumer_worker._on_assign_sync(mock_kafka_consumer, partitions)
+
+        mock_kafka_consumer.assign.assert_called_once_with(valid_partitions)
+        mock_kafka_consumer.unassign.assert_called_once()
+        assert "Consumer has no assigned partitions after assignment attempt" in caplog.text
+
+    def test_on_assign_sync_logs_error_if_assignment_check_fails(self, mock_kafka_consumer, consumer_worker, caplog):
+        partitions = [MagicMock()]
+
+        consumer_worker._validate_partition = lambda p: True
+        mock_kafka_consumer.assignment.side_effect = Exception("assignment failure")
+
+        consumer_worker._on_assign_sync(mock_kafka_consumer, partitions)
+
+        assert "Failed to reset consumer state" in caplog.text
 
     @pytest.mark.asyncio
     async def test_async_handler_execution(self, consumer_worker, mock_handler_registry, valid_message):

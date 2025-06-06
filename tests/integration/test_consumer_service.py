@@ -204,8 +204,7 @@ class TestIntegrationKafkaConsumerService:
 
         # Verify that the error was logged
         await asyncio.sleep(10)
-        assert "Failed to process message" in caplog.text
-        assert "Deserialization error" in caplog.text
+        assert "Invalid magic byte" in caplog.text
 
         # Ensure service continues running
         assert all(not w._cancelled.is_set() for w in consumer_service._workers)

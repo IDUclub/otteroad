@@ -37,7 +37,7 @@ def load_models_from_dir(models_dir: str) -> list[type[AvroEventModel]]:
                             if inspect.isclass(obj) and issubclass(obj, AvroEventModel) and obj != AvroEventModel:
                                 models.append(obj)
                 except Exception as e:  # pylint: disable=broad-exception-caught
-                    print(f"Error loading module {module_path}: {str(e)}")
+                    print(f"Error loading module {module_path}: {repr(e)}")
 
     return models
 
@@ -60,7 +60,7 @@ def save_avro_schema(model: type[AvroEventModel], output_dir: str):
 
         print(f"Generated: {file_path}")
     except Exception as e:  # pylint: disable=broad-exception-caught
-        print(f"Error generating schema for {model.__name__}: {str(e)}")
+        print(f"Error generating schema for {model.__name__}: {repr(e)}")
 
 
 def process_python_models(input_dir: str, output_dir: str):

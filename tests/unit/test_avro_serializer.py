@@ -78,23 +78,22 @@ class TestAvroSerializerMixin:
         assert isinstance(result, MyModel)
         assert result.field == 42
 
-    def test_deserialize_invalid_message_length(self, serializer):
+    def test_deserialize_invalid_message_length(self, serializer, caplog):
         """Test deserialization with an invalid message length."""
         message = MagicMock(spec=Message)
-        message.value.return_value = b"short"
+        message.value.return_value = b"s"
 
-        with pytest.raises(RuntimeError):
-            serializer.deserialize_message(message)
+        serializer.deserialize_message(message)
+        assert "Invalid message: missing or incomplete value" in caplog.text
 
-    def test_deserialize_invalid_magic_byte(self, serializer):
+    def test_deserialize_invalid_magic_byte(self, serializer, caplog):
         """Test deserialization with an invalid magic byte."""
         message = MagicMock(spec=Message)
         message.value.return_value = b"\x01\x00\x00\x00\x01" + b"morebytes"
 
-        with pytest.raises(RuntimeError) as exc_info:
-            serializer.deserialize_message(message)
+        serializer.deserialize_message(message)
 
-        assert "Invalid magic byte" in str(exc_info.value)
+        assert "Invalid magic byte" in caplog.text
 
     def test_get_model_class_caching(self, serializer):
         """
@@ -223,7 +222,7 @@ class TestAvroSerializerMixin:
         with pytest.raises(RuntimeError):
             serializer.deserialize_message(message)
 
-    def test_deserialize_message_none_value(self, serializer):
+    def test_deserialize_message_none_value(self, serializer, caplog):
         """Test deserialization with None value."""
         message = MagicMock(spec=Message)
         message.value.return_value = None
@@ -231,5 +230,5 @@ class TestAvroSerializerMixin:
         message.partition.return_value = 0
         message.offset.return_value = 123
 
-        with pytest.raises(RuntimeError, match="Invalid message: missing or incomplete value"):
-            serializer.deserialize_message(message)
+        serializer.deserialize_message(message)
+        assert "Invalid message: missing or incomplete value" in caplog.text

@@ -132,7 +132,7 @@ class KafkaProducerClient(AvroSerializerMixin):
                 # Process available delivery reports
                 self._producer.poll(self._POLL_INTERVAL)
             except Exception as e:  # pylint: disable=broad-except
-                self._logger.error("Polling error", error=e, exc_info=True)
+                self._logger.error("Polling error", error=repr(e), exc_info=True)
                 break
 
     async def send(  # pylint: disable=missing-raises-doc
@@ -172,7 +172,7 @@ class KafkaProducerClient(AvroSerializerMixin):
                 if err:
                     exc = KafkaException(err)
                     self._loop.call_soon_threadsafe(future.set_exception, exc)
-                    self._logger.error("Delivery failed", topic=target_topic, error=str(exc))
+                    self._logger.error("Delivery failed", topic=target_topic, error=repr(exc))
                 else:
                     self._loop.call_soon_threadsafe(future.set_result, msg)
                     self._logger.debug(
@@ -181,7 +181,11 @@ class KafkaProducerClient(AvroSerializerMixin):
 
             # Thread-safe message production
             self._producer.produce(
-                topic=target_topic, value=serialized, key=key, headers=headers, on_delivery=delivery_handler
+                topic=target_topic,
+                value=serialized,
+                key=key,
+                headers=headers,
+                on_delivery=delivery_handler,
             )
 
             await asyncio.wait_for(future, timeout)
@@ -191,7 +195,7 @@ class KafkaProducerClient(AvroSerializerMixin):
             self._logger.error("Message delivery timeout", topic=target_topic)
             raise RuntimeError("Message delivery timeout") from e
         except Exception as e:
-            self._logger.error("Failed to send message", topic=target_topic, error=str(e), exc_info=True)
+            self._logger.error("Failed to send message", topic=target_topic, error=repr(e), exc_info=True)
             raise
 
     @staticmethod
@@ -233,7 +237,7 @@ class KafkaProducerClient(AvroSerializerMixin):
             self._logger.warning("Flush operation timed out")
             raise RuntimeError("Flush timeout exceeded") from e
         except Exception as e:
-            self._logger.error("Flush failed", error=str(e), exc_info=True)
+            self._logger.error("Flush failed", error=repr(e), exc_info=True)
             raise
 
     async def close(self) -> None:
