@@ -1,6 +1,7 @@
 """Unit tests for Kafka consumer worker are defined here."""
 
 import asyncio
+import logging
 import threading
 import time
 from contextlib import suppress
@@ -14,6 +15,7 @@ from confluent_kafka.schema_registry import SchemaRegistryClient
 from otteroad.consumer import EventHandlerRegistry, KafkaConsumerWorker
 
 
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
 class TestKafkaConsumerWorker:
     """Test suite for KafkaConsumerWorker class."""
 
@@ -104,6 +106,17 @@ class TestKafkaConsumerWorker:
         assert not poll_thread.is_alive()
         assert consumer_worker._poll_thread is None
 
+    def test_enqueue_safely_timeout(self, consumer_worker, caplog):
+        msg = MagicMock()
+        future_mock = MagicMock()
+        future_mock.result.side_effect = TimeoutError()
+
+        with patch("asyncio.run_coroutine_threadsafe", return_value=future_mock):
+            with caplog.at_level("WARNING"):
+                consumer_worker._enqueue_safely(msg)
+
+            assert "Message dropped: queue full after timeout" in caplog.text
+
     @pytest.mark.asyncio
     async def test_poll_loop_enqueues_messages(self, consumer_worker, mock_kafka_consumer, valid_message):
         """Test that the poll loop enqueues messages."""
@@ -137,6 +150,28 @@ class TestKafkaConsumerWorker:
         assert "Consumer error" in caplog.text
         assert "Critical error in poll loop" in caplog.text
 
+    def test_poll_loop_triggers_pause(self, consumer_worker):
+        consumer_worker._queue.qsize = Mock(return_value=consumer_worker.PAUSE_THRESHOLD + 1)
+        consumer_worker._consumer.poll = Mock(
+            return_value=Mock(
+                error=Mock(return_value=None),
+                topic=Mock(return_value="test"),
+                partition=Mock(return_value=0),
+                offset=Mock(return_value=1),
+            )
+        )
+        consumer_worker._consumer.assignment = Mock(return_value=["partition"])
+        consumer_worker._consumer.pause = Mock()
+        consumer_worker._is_paused = False
+        consumer_worker._cancelled.is_set = Mock(side_effect=[False, True])  # exit after one loop
+
+        consumer_worker._enqueue_safely = Mock()  # avoid queue interaction
+
+        consumer_worker._poll_loop()
+
+        consumer_worker._consumer.pause.assert_called_once()
+        assert consumer_worker._is_paused is True
+
     def test_process_commits_handles_errors(self, consumer_worker, mock_kafka_consumer, caplog):
         """Test handling errors in process commits."""
         msg = MagicMock()
@@ -162,6 +197,22 @@ class TestKafkaConsumerWorker:
         assert "Processing error" in caplog.text
 
     @pytest.mark.asyncio
+    async def test_process_loop_triggers_resume(self, consumer_worker):
+        msg = Mock()
+        consumer_worker._queue.get = AsyncMock(side_effect=[msg, asyncio.CancelledError()])
+        consumer_worker._queue.qsize = Mock(return_value=consumer_worker.RESUME_THRESHOLD - 1)
+        consumer_worker._queue.task_done = Mock()
+        consumer_worker._handle_message = AsyncMock()
+        consumer_worker._consumer.assignment = Mock(return_value=["partition"])
+        consumer_worker._consumer.resume = Mock()
+        consumer_worker._is_paused = True
+
+        await consumer_worker._process_loop()
+
+        consumer_worker._consumer.resume.assert_called_once()
+        assert consumer_worker._is_paused is False
+
+    @pytest.mark.asyncio
     async def test_handle_message_success(self, consumer_worker, mock_handler_registry, valid_message):
         """Test handling a valid message successfully."""
         # Arrange: mock the event deserialization and handler
@@ -178,17 +229,16 @@ class TestKafkaConsumerWorker:
         assert consumer_worker._commit_queue.qsize() == 1
 
     @pytest.mark.asyncio
-    async def test_handle_message_deserialization_error(self, consumer_worker, caplog, valid_message):
+    async def test_handle_message_skips_deserialization_error(self, consumer_worker, caplog, valid_message):
         """Test handling a message with deserialization error."""
         # Arrange: simulate deserialization error
-        consumer_worker.deserialize_message = Mock(side_effect=Exception("Deserialization error"))
+        consumer_worker.deserialize_message = Mock(return_value=None)
 
         # Act: handle the message
         await consumer_worker._handle_message(valid_message)
 
         # Assert: check that the error is logged and the commit queue is not empty
-        assert "Failed to process message" in caplog.text
-        assert consumer_worker._commit_queue.empty()
+        assert not consumer_worker._commit_queue.empty()
 
     @pytest.mark.asyncio
     async def test_handle_message_skips_none_event(self, consumer_worker, valid_message):
@@ -203,6 +253,42 @@ class TestKafkaConsumerWorker:
 
         assert not consumer_worker._commit_queue.empty()
         assert consumer_worker._commit_queue.get_nowait() == valid_message
+
+    @pytest.mark.asyncio
+    async def test_handle_message_retry_on_failure(self, consumer_worker, caplog):
+        caplog.set_level(logging.ERROR)
+
+        msg = Mock()
+        msg.topic.return_value = "test"
+        msg.partition.return_value = 0
+        msg.offset.return_value = 42
+
+        # 1. `deserialize_message` returns valid event
+        event = Mock()
+        consumer_worker.deserialize_message = Mock(return_value=event)
+
+        # 2. `get_handler` returns valid handler
+        handler = Mock()
+        handler.process = AsyncMock(side_effect=[Exception("boom"), None])  # fail once, succeed next
+        consumer_worker._handler_registry.get_handler = Mock(return_value=handler)
+
+        # 3. simulate 2nd attempt success by patching after first fail
+        sleep_mock = AsyncMock()
+
+        # 4. disable auto commit so commit logic is tested
+        consumer_worker._settings["enable.auto.commit"] = False
+
+        # 5. mock commit queue
+        consumer_worker._commit_queue = Mock()
+        consumer_worker._commit_queue.put = Mock()
+
+        # Run method (break loop after second try)
+        with patch("asyncio.sleep", new=sleep_mock):
+            await consumer_worker._handle_message(msg)
+
+        assert "Failed to process message" in caplog.text
+        sleep_mock.assert_awaited_once()
+        consumer_worker._commit_queue.put.assert_called_once_with(msg)
 
     def test_shutdown_consumer_handles_errors(self, consumer_worker, mock_kafka_consumer, caplog):
         """Test handling error while consumer shutdown."""
