@@ -32,15 +32,21 @@ class KafkaConsumerWorker(AvroSerializerMixin):
         loop (Optional[asyncio.AbstractEventLoop]): Asyncio event loop to schedule tasks on.
 
     Attributes:
-        _MAX_QUEUE_SIZE: Maximum number of messages in producer queue
-        _POLL_INTERVAL: Polling interval in seconds for delivery reports
+        MAX_QUEUE_SIZE: Maximum number of messages in producer queue
+        POLL_INTERVAL: Polling interval in seconds for delivery reports
+        PAUSE_THRESHOLD: Maximum number of messages to pause consuming
+        RESUME_THRESHOLD: Minimum number of messages to resume consuming
+        HANDLE_MESSAGE_ERROR_INTERVAL: Sleeping interval in seconds to retry handling messages
 
     Raises:
         RuntimeError: If asyncio loop cannot be determined when creating the worker.
     """
 
-    _MAX_QUEUE_SIZE: ClassVar[int] = 10000  # Prevents memory overconsumption
-    _POLL_INTERVAL: ClassVar[float] = 0.1  # 10ms polling interval
+    MAX_QUEUE_SIZE: ClassVar[int] = 10000  # Prevents memory overconsumption
+    POLL_INTERVAL: ClassVar[float] = 0.1  # 10ms polling interval
+    PAUSE_THRESHOLD: ClassVar[int] = 8000  # Max number of messages in queue to pause polling
+    RESUME_THRESHOLD: ClassVar[int] = 4000  # Min number of messages in queue to resume polling
+    HANDLE_MESSAGE_ERROR_INTERVAL: ClassVar[float] = 60.0  # Interval beetwen retries handling messages
 
     def __init__(
         self,
@@ -87,7 +93,8 @@ class KafkaConsumerWorker(AvroSerializerMixin):
         self._consumer = Consumer(self._settings)
 
         # Use asyncio queue to track outstanding tasks
-        self._queue: asyncio.Queue[Message] = asyncio.Queue(maxsize=self._MAX_QUEUE_SIZE)
+        self._queue: asyncio.Queue[Message] = asyncio.Queue(maxsize=self.MAX_QUEUE_SIZE)
+        self._is_paused = False
 
         # Threading and task control
         self._cancelled = threading.Event()
@@ -129,6 +136,17 @@ class KafkaConsumerWorker(AvroSerializerMixin):
         self._process_task = self._loop.create_task(self._process_loop())
         self._logger.info("Consumer started for topics", topics=self._topics)
 
+    def _enqueue_safely(self, msg: Message) -> None:
+        """
+        Enqueue a message into the asyncio queue from a background thread.
+        Blocks until there is space in the queue.
+        """
+        try:
+            future = asyncio.run_coroutine_threadsafe(self._queue.put(msg), self._loop)
+            future.result(timeout=self._settings.get("max.pool.interval.ms", 300000) / 2)
+        except TimeoutError:
+            self._logger.warning("Message dropped: queue full after timeout")
+
     def _poll_loop(self) -> None:
         """
         Poll loop running in background thread: fetch messages and enqueue for processing.
@@ -136,13 +154,13 @@ class KafkaConsumerWorker(AvroSerializerMixin):
         Raises:
             Exception: Logs any unexpected errors then shuts down consumer.
         """
-        try:
+        try:  # pylint: disable=too-many-try-statements
             while not self._cancelled.is_set():
                 # First, process any pending commits
                 self._process_commits()
 
                 # Poll Kafka with a short timeout
-                msg = self._consumer.poll(self._POLL_INTERVAL)
+                msg = self._consumer.poll(self.POLL_INTERVAL)
                 if msg is None:
                     continue
 
@@ -158,7 +176,14 @@ class KafkaConsumerWorker(AvroSerializerMixin):
                 )
 
                 # Safely enqueue the message for asynchronous processing
-                self._loop.call_soon_threadsafe(self._queue.put_nowait, msg)
+                self._enqueue_safely(msg)
+
+                if not self._is_paused and self._queue.qsize() > self.PAUSE_THRESHOLD:
+                    self._logger.warning("Pausing consumer...")
+                    assignments = self._consumer.assignment()
+                    if assignments:
+                        self._consumer.pause(assignments)
+                        self._is_paused = True
         except Exception as e:  # pylint: disable=broad-except
             self._logger.error("Critical error in poll loop", error=repr(e), exc_info=True)
         finally:
@@ -233,6 +258,13 @@ class KafkaConsumerWorker(AvroSerializerMixin):
                 finally:
                     # Mark message done regardless of success/failure
                     self._queue.task_done()
+
+                if self._is_paused and self._queue.qsize() < self.RESUME_THRESHOLD:
+                    self._logger.info("Resuming consumer...")
+                    assignments = self._consumer.assignment()
+                    if assignments:
+                        self._consumer.resume(assignments)
+                        self._is_paused = False
         except asyncio.CancelledError:
             self._logger.info("Processing loop cancelled")
 
@@ -246,51 +278,57 @@ class KafkaConsumerWorker(AvroSerializerMixin):
         Raises:
             Exception: Logs any errors during deserialization or handling.
         """
-        should_commit: bool = False
-        try:  # pylint: disable=too-many-try-statements
-            # Deserialize payload to event object
-            event = self.deserialize_message(msg)
-            if event is None:
+        attempt = 1
+        while True:
+            should_commit: bool = False
+            try:  # pylint: disable=too-many-try-statements
+                # Deserialize payload to event object
+                event = self.deserialize_message(msg)
+                if event is None:
+                    should_commit = True
+                    break
+
+                # Lookup handler based on event type or content
+                handler = self._handler_registry.get_handler(event)
+                if handler is None:
+                    self._logger.warning("Handler not found for event", event_model=event)
+                    should_commit = True
+                    break
+
+                # Execute handler, using thread if synchronous
+                if asyncio.iscoroutinefunction(handler.process):
+                    await handler.process(event, msg)
+                else:
+                    await asyncio.to_thread(handler.process, event, msg)
+
                 should_commit = True
-                return
 
-            # Lookup handler based on event type or content
-            handler = self._handler_registry.get_handler(event)
-            if handler is None:
-                self._logger.warning("Handler not found for event", event_model=event)
-                should_commit = True
-                return
+                self._logger.info(
+                    "Message successfully processed",
+                    event_model=type(event).__name__,
+                    topic=msg.topic(),
+                    partition=msg.partition(),
+                    offset=msg.offset(),
+                )
 
-            # Execute handler, using thread if synchronous
-            if asyncio.iscoroutinefunction(handler.process):
-                await handler.process(event, msg)
-            else:
-                await asyncio.to_thread(handler.process, event, msg)
+            except Exception as e:  # pylint: disable=broad-except
+                self._logger.error(
+                    "Failed to process message",
+                    attempt=attempt,
+                    topic=msg.topic(),
+                    partition=msg.partition(),
+                    offset=msg.offset(),
+                    error=repr(e),
+                    exc_info=True,
+                )
+                attempt += 1
+                await asyncio.sleep(self.HANDLE_MESSAGE_ERROR_INTERVAL)
 
-            should_commit = True
-
-            self._logger.info(
-                "Message successfully processed",
-                event_model=type(event).__name__,
-                topic=msg.topic(),
-                partition=msg.partition(),
-                offset=msg.offset(),
-            )
-
-        except Exception as e:  # pylint: disable=broad-except
-            self._logger.error(
-                "Failed to process message",
-                topic=msg.topic(),
-                partition=msg.partition(),
-                offset=msg.offset(),
-                error=repr(e),
-                exc_info=True,
-            )
-
-        finally:
-            # If auto-commit is disabled, buffer for commit
-            if should_commit and not self._settings.get("enable.auto.commit", True):
-                self._commit_queue.put(msg)
+            finally:
+                # If auto-commit is disabled, buffer for commit
+                if should_commit and not self._settings.get("enable.auto.commit", True):
+                    self._commit_queue.put(msg)
+                    break  # pylint: disable=lost-exception
 
     def _validate_partition(self, partition: TopicPartition) -> bool:
         """
