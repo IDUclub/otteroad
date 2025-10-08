@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "otteroad"
-version = "0.1.7"
+version = "0.2.0"
 description = "Framework with scalable Kafka consumer/producer logic for IDU FastAPI services."
 authors = ["Ruslan Babayev <rus.babaef@yandex.ru>"]
 readme = "README.md"

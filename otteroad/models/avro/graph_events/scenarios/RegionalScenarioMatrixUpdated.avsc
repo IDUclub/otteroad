@@ -1,0 +1,18 @@
+{
+  "type": "record",
+  "name": "RegionalScenarioMatrixUpdated",
+  "namespace": "graph.events.scenarios",
+  "doc": "Model for message indicates that transport matrix have been updated for regional scenario.",
+  "fields": [
+    {
+      "name": "scenario_id",
+      "type": "long",
+      "doc": "regional scenario identifier for which matrix have been updated"
+    },
+    {
+      "name": "territory_id",
+      "type": "long",
+      "doc": "region territory identifier for which scenario has been created"
+    }
+  ]
+}

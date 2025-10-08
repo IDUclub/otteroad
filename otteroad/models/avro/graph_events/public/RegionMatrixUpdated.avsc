@@ -1,0 +1,13 @@
+{
+  "type": "record",
+  "name": "RegionMatrixUpdated",
+  "namespace": "graph.events.public",
+  "doc": "Model for message indicates that transport matrix have been updated for region.",
+  "fields": [
+    {
+      "name": "territory_id",
+      "type": "long",
+      "doc": "region territory identifier for which matrix has been updated"
+    }
+  ]
+}

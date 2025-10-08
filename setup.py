@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="otteroad",
-    version="0.1.0",
+    version="0.2.0",
     description="Framework with scalable Kafka consumer/producer logic for IDU FastAPI services.",
     author="Ruslan Babayev",
     author_email="rus.babaef@yandex.ru",

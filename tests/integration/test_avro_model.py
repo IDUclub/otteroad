@@ -8,7 +8,8 @@ from uuid import UUID, uuid4
 
 import pytest
 from confluent_kafka.schema_registry import SchemaRegistryClient
-from confluent_kafka.schema_registry.avro import AvroSerializer, SerializationContext
+from confluent_kafka.schema_registry.avro import AvroSerializer
+from confluent_kafka.serialization import SerializationContext, MessageField
 from pydantic import ValidationError
 
 from otteroad.avro import AvroEventModel
@@ -144,7 +145,7 @@ class TestIntegrationAvroEventModel:
 
         # Serialize using the Avro serializer
         avro_data = avro_serializer(
-            event.to_avro_dict(), SerializationContext(topic="some-topic", field="value")  # Specify the correct topic
+            event.to_avro_dict(), SerializationContext(topic="some-topic", field=MessageField.VALUE)  # Specify the correct topic
         )
 
         # Check the serialized data for schema compatibility

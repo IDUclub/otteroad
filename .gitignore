@@ -178,3 +178,4 @@ cython_debug/
 
 docker-compose.yaml
 kafka.docker-compose.yaml
+/poetry.toml

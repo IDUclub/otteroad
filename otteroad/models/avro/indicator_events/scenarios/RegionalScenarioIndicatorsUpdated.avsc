@@ -2,12 +2,12 @@
   "type": "record",
   "name": "RegionalScenarioIndicatorsUpdated",
   "namespace": "indicator.events.scenarios",
-  "doc": "Model for message indicates that an indicator value has been updated for regional scenario.",
+  "doc": "Model for message indicates that indicator values have been updated for all hexagons in regional scenario.",
   "fields": [
     {
       "name": "scenario_id",
       "type": "long",
-      "doc": "regional scenario identifier for which indicator value has been updated"
+      "doc": "regional scenario identifier for which values have been updated"
     },
     {
       "name": "territory_id",
@@ -18,11 +18,6 @@
       "name": "indicator_id",
       "type": "long",
       "doc": "updated indicator identifier for which value has been updated"
-    },
-    {
-      "name": "indicator_value_id",
-      "type": "long",
-      "doc": "updated indicator value identifier"
     }
   ]
 }
