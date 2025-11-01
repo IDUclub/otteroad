@@ -353,16 +353,26 @@ class KafkaConsumerWorker(AvroSerializerMixin):
             partitions (List[TopicPartition]): List of assigned partitions.
         """
         try:
-            self._logger.info("Assigned partitions", partitions=partitions)
+            self._logger.info(
+                "Assigned partitions",
+                partitions=[f"{p.topic}:{p.partition}@{p.offset}" for p in partitions],
+            )
 
             # Additional check: partitions exist
             valid_partitions = [p for p in partitions if self._validate_partition(p)]
             if len(valid_partitions) != len(partitions):
-                self._logger.warning("Attempted to assign invalid partitions", valid=valid_partitions, all=partitions)
+                self._logger.warning(
+                    "Attempted to assign invalid partitions",
+                    valid=[f"{p.topic}:{p.partition}@{p.offset}" for p in valid_partitions],
+                    all=[f"{p.topic}:{p.partition}@{p.offset}" for p in partitions],
+                )
 
             # We assign only valid partitions
             consumer.assign(valid_partitions)
-            self._logger.debug("Partitions assigned successfully", valid=valid_partitions)
+            self._logger.debug(
+                "Partitions assigned successfully",
+                valid=[f"{p.topic}:{p.partition}@{p.offset}" for p in valid_partitions],
+            )
 
         except KafkaException as e:
             kafka_error = e.args[0]
@@ -401,14 +411,19 @@ class KafkaConsumerWorker(AvroSerializerMixin):
             partitions (List[TopicPartition]): List of revoked partitions.
         """
         try:
-            self._logger.info("Revoked partitions", partitions=partitions)
+            self._logger.info(
+                "Revoked partitions", partitions=[f"{p.topic}:{p.partition}@{p.offset}" for p in partitions]
+            )
             consumer.commit(offsets=partitions, asynchronous=False)
             self._logger.debug("Offsets committed for revoked partitions")
         except KafkaException as e:
             # Handling the error of missing offsets
             if e.args[0].code() == KafkaError._NO_OFFSET:
                 self._logger.warning(
-                    "No offsets to commit for partitions", partitions=partitions, error=repr(e), exc_info=True
+                    "No offsets to commit for partitions",
+                    partitions=[f"{p.topic}:{p.partition}@{p.offset}" for p in partitions],
+                    error=repr(e),
+                    exc_info=True,
                 )
             else:
                 self._logger.error("Commit error on revoke", error=repr(e), exc_info=True)

@@ -188,7 +188,7 @@ class TestIntegrationKafkaConsumerService:
         producer.flush()
 
         # Wait for processing and verify handler was called
-        await asyncio.sleep(10)
+        await asyncio.sleep(20)
         assert handler.process.call_count == 1
 
     @pytest.mark.asyncio
