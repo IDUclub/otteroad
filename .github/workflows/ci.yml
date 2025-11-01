@@ -141,4 +141,4 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           file: coverage.xml
-          slug: Jesusya-26/otteroad
+          slug: IDUclub/otteroad
