@@ -3,7 +3,7 @@
 [![code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![PyPI version](https://badge.fury.io/py/otteroad.svg)](https://pypi.org/project/otteroad/)
 [![CI](https://github.com/Jesusya-26/otteroad/actions/workflows/ci.yml/badge.svg)](https://github.com/Jesusya-26/otteroad/actions)
-[![codecov](https://codecov.io/gh/Jesusya-26/otteroad/branch/main/graph/badge.svg)](https://codecov.io/gh/Jesusya-26/otteroad)
+[![codecov](https://codecov.io/gh/IDUclub/otteroad/branch/main/graph/badge.svg)](https://codecov.io/gh/IDUclub/otteroad)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](./LICENSE)
 
 ![logo](https://drive.google.com/uc?export=view&id=1DuMT0nrzqfRr3q5kUeki_6q6eI1gs-5m)

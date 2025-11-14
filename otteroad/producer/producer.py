@@ -55,6 +55,7 @@ class KafkaProducerClient(AvroSerializerMixin):
         logger: LoggerProtocol | None = None,
         loop: asyncio.AbstractEventLoop | None = None,
         disable_internal_kafka_logs: bool = False,
+        init_loop: bool = True,
     ):
         """
         Initialize Kafka producer client with schema registry.
@@ -63,6 +64,8 @@ class KafkaProducerClient(AvroSerializerMixin):
             producer_settings: Kafka producer configuration settings
             logger: Custom logger implementation
             loop: Asyncio event loop for async operations
+            disable_internal_kafka_logs: Flag to disable internal kafka logs.
+            init_loop: Flag to get event loop while initialization class.
 
         Raises:
             RuntimeError: If no event loop available and not running in async context
@@ -81,10 +84,15 @@ class KafkaProducerClient(AvroSerializerMixin):
         self._producer = Producer(config)
 
         # Event loop management
-        try:
-            self._loop = loop or asyncio.get_running_loop()
-        except RuntimeError as e:
-            raise RuntimeError("No event loop provided and not running in async context") from e
+        self._loop: asyncio.AbstractEventLoop | None = None
+        if init_loop:
+            try:
+                self._loop = loop or asyncio.get_running_loop()
+            except RuntimeError as e:
+                raise RuntimeError(
+                    "No event loop provided and not running in async context. "
+                    "Either supply 'loop' or set init_loop=False and call init_loop() later."
+                ) from e
 
         # Thread control
         self._cancelled = threading.Event()
@@ -106,6 +114,20 @@ class KafkaProducerClient(AvroSerializerMixin):
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.close()
+
+    def init_loop(self, loop: asyncio.AbstractEventLoop | None = None):
+        """
+        Initialize event loop for the producer (used when init_loop = False in __init__).
+
+        Must be called from an async context.
+        """
+        if self._loop is not None:
+            raise RuntimeError("Event loop is already initialized")
+
+        try:
+            self._loop = loop or asyncio.get_running_loop()
+        except RuntimeError as e:
+            raise RuntimeError("init_loop() must be called inside an async context where event loop is running") from e
 
     async def start(self) -> None:
         """
