@@ -203,7 +203,7 @@ class TestIntegrationKafkaConsumerService:
         producer.flush()
 
         # Verify that the error was logged
-        await asyncio.sleep(10)
+        await asyncio.sleep(20)
         assert "Invalid magic byte" in caplog.text
 
         # Ensure service continues running

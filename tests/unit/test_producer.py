@@ -79,6 +79,28 @@ class TestKafkaProducerClient:
             KafkaProducerClient(producer_settings=mock_producer_settings)
 
     @pytest.mark.asyncio
+    async def test_init_loop_post_initialization(self, mock_producer_settings):
+        """Test post-initialization of the event loop when init_loop=False."""
+        with patch("otteroad.producer.producer.Producer"):
+            # Создаём клиент без инициализации loop
+            client = KafkaProducerClient(producer_settings=mock_producer_settings, init_loop=False)
+
+            assert client._loop is None
+            client.init_loop()
+            assert client._loop is asyncio.get_running_loop()
+
+            with pytest.raises(RuntimeError, match="already initialized"):
+                client.init_loop()
+
+    def test_init_loop_raises_outside_async(self, mock_producer_settings):
+        """init_loop() must fail if called outside an async context."""
+        with patch("otteroad.producer.producer.Producer"):
+            client = KafkaProducerClient(mock_producer_settings, init_loop=False)
+
+            with pytest.raises(RuntimeError, match="async context"):
+                client.init_loop()
+
+    @pytest.mark.asyncio
     async def test_start_stop_flow(self, producer_client):
         """Test the start and stop flow of the producer producer_client."""
         await producer_client.start()
