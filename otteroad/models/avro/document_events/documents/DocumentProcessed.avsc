@@ -1,0 +1,13 @@
+{
+  "type": "record",
+  "name": "DocumentProcessed",
+  "namespace": "document.events.documents",
+  "doc": "Model for message indicates that a document has been fully processed\nand stored in the vector database (IDU_DVD).",
+  "fields": [
+    {
+      "name": "document_name",
+      "type": "string",
+      "doc": "unique document name (registry key), enough to fetch all fragments and versions of the document from the DVD API"
+    }
+  ]
+}

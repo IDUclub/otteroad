@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="otteroad",
-    version="0.2.2",
+    version="0.3.0",
     description="Framework with scalable Kafka consumer/producer logic for IDU FastAPI services.",
     author="Ruslan Babayev",
     author_email="rus.babaef@yandex.ru",
@@ -10,7 +10,7 @@ setup(
     long_description_content_type="text/markdown",
     license="Apache-2.0",
     packages=find_packages(exclude=("tests*", "examples*", "scripts*")),
-    python_requires=">=3.10,<4.0",
+    python_requires=">=3.11,<4.0",
     install_requires=[
         "pydantic>=2.11.3,<3.0.0",
         "pyyaml>=6.0.2,<7.0.0",
@@ -19,7 +19,7 @@ setup(
         "confluent-kafka[schemaregistry]>=2.10.0,<3.0.0",
     ],
     classifiers=[
-        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
         "License :: OSI Approved :: Apache Software License",
         "Operating System :: OS Independent",
         "Development Status :: 3 - Beta",
