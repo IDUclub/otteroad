@@ -1,13 +1,13 @@
 [tool.poetry]
 name = "otteroad"
-version = "0.2.2"
+version = "0.3.0"
 description = "Framework with scalable Kafka consumer/producer logic for IDU FastAPI services."
 authors = ["Ruslan Babayev <rus.babaef@yandex.ru>"]
 readme = "README.md"
 license = "Apache-2.0"
 
 [tool.poetry.dependencies]
-python = "^3.10"
+python = "^3.11"
 pydantic = "^2.11.3"
 pyyaml = "^6.0.2"
 python-dotenv = "^1.1.0"
