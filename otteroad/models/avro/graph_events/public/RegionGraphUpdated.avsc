@@ -1,0 +1,23 @@
+{
+  "type": "record",
+  "name": "RegionGraphUpdated",
+  "namespace": "graph.events.public",
+  "doc": "Model for message indicates that the graph of a region has been updated (a new version is active).",
+  "fields": [
+    {
+      "name": "territory_id",
+      "type": "long",
+      "doc": "region territory identifier whose graph has been updated"
+    },
+    {
+      "name": "graph_kind",
+      "type": "string",
+      "doc": "graph kind: walk, drive, bike, pt_osm or pt_gtfs"
+    },
+    {
+      "name": "version_id",
+      "type": "long",
+      "doc": "identifier of the graph version that became active"
+    }
+  ]
+}

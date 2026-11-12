@@ -1,0 +1,26 @@
+{
+  "type": "record",
+  "name": "ScenarioGraphUpdated",
+  "namespace": "graph.events.scenarios",
+  "doc": "Model for message indicates that the graph edits of a scenario have been changed.",
+  "fields": [
+    {
+      "name": "scenario_id",
+      "type": "long",
+      "doc": "scenario identifier whose graph edits have been changed"
+    },
+    {
+      "name": "project_id",
+      "type": "long",
+      "doc": "project identifier of the scenario"
+    },
+    {
+      "name": "graph_kinds",
+      "type": {
+        "type": "array",
+        "items": "string"
+      },
+      "doc": "graph kinds whose edits changed: walk, drive or bike"
+    }
+  ]
+}
