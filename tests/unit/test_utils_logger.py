@@ -1,5 +1,6 @@
 """Unit tests for LoggerAdapter class are defined here."""
 
+import logging
 from unittest.mock import Mock
 
 from otteroad.utils.logger import LoggerAdapter
@@ -76,3 +77,16 @@ class TestLoggerAdapter:
         adapter.warning("Fallback case", detail="none")
 
         logger_mock.info.assert_called_once_with("Fallback case (detail = none)", exc_info=None)
+
+    def test_log_with_numeric_level_and_args(self):
+        """Should map a numeric logging level to the level method and apply %-style arguments"""
+        logger_mock = Mock()
+        adapter = LoggerAdapter(logger_mock)
+
+        adapter.log(logging.WARNING, "%s [%s] %s", "FAIL", "rdkafka#producer-1", "connection refused")
+        adapter.log(logging.DEBUG, "plain")
+        adapter.log(logging.CRITICAL + 10, "worse than critical")
+
+        logger_mock.warning.assert_called_once_with("FAIL [rdkafka#producer-1] connection refused", exc_info=None)
+        logger_mock.debug.assert_called_once_with("plain", exc_info=None)
+        logger_mock.critical.assert_called_once_with("worse than critical", exc_info=None)
