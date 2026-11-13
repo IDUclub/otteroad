@@ -17,6 +17,7 @@ from otteroad.consumer.handlers.registry import EventHandlerRegistry
 from otteroad.consumer.worker import KafkaConsumerWorker
 from otteroad.settings import KafkaConsumerSettings
 from otteroad.utils import LoggerAdapter, LoggerProtocol
+from otteroad.utils.logger import kafka_logger_config
 
 
 class KafkaConsumerService:
@@ -41,7 +42,7 @@ class KafkaConsumerService:
         disable_internal_kafka_logs: bool = False,
     ):
         self._logger = LoggerAdapter(logger or logging.getLogger(__name__))
-        self._logger_config = {"logger": self._logger, "log_level": logging.INFO if disable_internal_kafka_logs else 0}
+        self._logger_config = kafka_logger_config(self._logger, disable_internal_kafka_logs)
         self._settings = consumer_settings
         self._handler_registry = EventHandlerRegistry()
         self._workers: list[KafkaConsumerWorker] = []

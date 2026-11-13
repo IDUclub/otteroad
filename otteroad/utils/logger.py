@@ -4,6 +4,7 @@ ensuring type-safe injection of custom logger implementations throughout
 the Kafka client library.
 """
 
+import logging
 from typing import Protocol, runtime_checkable
 
 
@@ -117,3 +118,42 @@ class LoggerAdapter:
 
     def critical(self, msg: str, **kwargs):  # pylint: disable=missing-function-docstring
         self._log("critical", msg, **kwargs)
+
+    def log(self, level: int, msg: str, *args, **kwargs):
+        """
+        Log with a numeric `logging` level and %-style arguments, as `logging.Logger.log` does.
+
+        confluent-kafka sends the internal librdkafka logs through this method of the `logger` it is given.
+        """
+        if args:
+            msg = msg % args
+        if level >= logging.CRITICAL:
+            self.critical(msg, **kwargs)
+        elif level >= logging.ERROR:
+            self.error(msg, **kwargs)
+        elif level >= logging.WARNING:
+            self.warning(msg, **kwargs)
+        elif level >= logging.INFO:
+            self.info(msg, **kwargs)
+        else:
+            self.debug(msg, **kwargs)
+
+
+# librdkafka `log_level` is a syslog level, 0 (emergency) to 7 (debug); 6 (info) is the librdkafka default.
+KAFKA_LOG_LEVEL_SILENT = 0
+KAFKA_LOG_LEVEL_DEFAULT = 6
+
+
+def kafka_logger_config(logger: LoggerAdapter, disable_internal_kafka_logs: bool) -> dict:
+    """
+    Settings that route the internal librdkafka logs to `logger`.
+
+    Args:
+        logger: Adapter that receives the logs.
+        disable_internal_kafka_logs: Keep emergencies only instead of the librdkafka default level.
+
+    Returns:
+        dict: `logger` and `log_level` entries of a confluent-kafka configuration.
+    """
+    level = KAFKA_LOG_LEVEL_SILENT if disable_internal_kafka_logs else KAFKA_LOG_LEVEL_DEFAULT
+    return {"logger": logger, "log_level": level}

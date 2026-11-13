@@ -19,6 +19,7 @@ from otteroad.avro.model import AvroEventModel
 from otteroad.avro.serializer import AvroSerializerMixin
 from otteroad.settings import KafkaProducerSettings
 from otteroad.utils import LoggerAdapter, LoggerProtocol
+from otteroad.utils.logger import kafka_logger_config
 
 EventModel = TypeVar("EventModel", bound=AvroEventModel)
 
@@ -71,7 +72,7 @@ class KafkaProducerClient(AvroSerializerMixin):
             RuntimeError: If no event loop available and not running in async context
         """
         self._logger = LoggerAdapter(logger or logging.getLogger(__name__))
-        logger_config = {"logger": self._logger, "log_level": logging.INFO if disable_internal_kafka_logs else 0}
+        logger_config = kafka_logger_config(self._logger, disable_internal_kafka_logs)
 
         # Initialize schema registry and serialization
         schema_registry = SchemaRegistryClient(producer_settings.get_schema_registry_config())
